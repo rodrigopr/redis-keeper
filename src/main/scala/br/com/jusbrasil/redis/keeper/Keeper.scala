@@ -7,6 +7,7 @@ object KeeperMeta {
   sealed trait KeeperState
   case object StartingState extends KeeperState
   case object RunningWorkerState extends KeeperState
+  case object StartingLeaderState extends KeeperState
   case object RunningLeaderState extends KeeperState
 
   sealed trait KeeperData
@@ -24,6 +25,22 @@ class KeeperActor(conf: Conf) extends Actor with FSM[KeeperState, KeeperData] {
    */
   when(StartingState)(Map.empty)
   when(RunningWorkerState)(Map.empty)
+
+  /**
+   * Keep in this state until a FailOverTick happen, so that
+   * the initial state of the redis cluster can be better defined.
+   */
+  when(StartingLeaderState) {
+    case Event(f @ FailoverTick, keeperConf: KeeperConfiguration) =>
+      if(!keeperConf.leader.isLeader) {
+        goto(RunningWorkerState)
+      } else {
+        keeperConf.clusters.foreach { cluster =>
+          cluster.actor ! InitClusterSetup(keeperConf.leader)
+        }
+        goto(RunningLeaderState)
+      }
+  }
 
   /**
    * Leader specific behavior.
@@ -49,7 +66,7 @@ class KeeperActor(conf: Conf) extends Actor with FSM[KeeperState, KeeperData] {
      * KeeperConfiguration event is triggered when it is first configured or the leadership changed
      */
     case Event(conf @ KeeperConfiguration(leader, _), _) =>
-      val workingState = if(leader.isLeader) RunningLeaderState else RunningWorkerState
+      val workingState = if(leader.isLeader) StartingLeaderState else RunningWorkerState
       goto(workingState) using conf
 
     /**

@@ -82,6 +82,11 @@
       <artifactId>snakeyaml</artifactId>
       <version>1.12</version>
     </dependency>
+    <dependency>
+      <groupId>io.argonaut</groupId>
+      <artifactId>argonaut_2.10</artifactId>
+      <version>6.0-RC1</version>
+    </dependency>
   </dependencies>
 
   <build>

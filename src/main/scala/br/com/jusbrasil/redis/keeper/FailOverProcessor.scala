@@ -1,12 +1,144 @@
 package br.com.jusbrasil.redis.keeper
 
-import org.apache.log4j.Logger
-import br.com.jusbrasil.redis.keeper.ClusterMeta._
+import br.com.jusbrasil.redis.keeper.ClusterMeta.ClusterDefinition
 import br.com.jusbrasil.redis.keeper.RedisRole._
-import scala.annotation.tailrec
+import org.apache.log4j.Logger
+import scala._
+import scala.Some
 
-class FailOverProcessor(cluster: ClusterDefinition, goingOffline: List[RedisNode], goingOnline: List[RedisNode]) {
-  private val logger = Logger.getLogger(classOf[FailOverProcessor])
+// TODO: improve interface to have more data about the transaction
+trait Process {
+  protected val logger: Logger
+  protected val cluster: ClusterDefinition
+
+  def begin(): Boolean
+
+  /**
+   * Elects a new master.
+   * Use the actual role on zookeeper, num slaves connected and node uptime in consideration.
+   *
+   * This will actually select the best node and update his role to Master
+   * If the elected node fail to change his role, he will be set on the Undefined state,
+   * and another node will be chosen, until one node in good state succeed or no node is available.
+   *
+   * Return the selected Master or None if failed to do so.
+   */
+  def electBestMaster(candidates: List[RedisNode]): Option[RedisNode] = {
+    val slavesPerMaster = groupSlaves(candidates)
+    if(!candidates.isEmpty) {
+      val sortedMasters = candidates.sortBy { n =>
+        val numberOfSlaves = slavesPerMaster.getOrElse(Some(n), Nil).size
+        val uptime = n.status.info.getOrElse("uptime_in_seconds", "0").toInt
+        val rolePriorityMap = Map(Master -> 0, Slave -> 1, Undefined -> 3, Down -> 4)
+        (rolePriorityMap(n.actualRole), -1 * numberOfSlaves, -1 * uptime)
+      }
+
+      val master = sortedMasters.find { node =>
+        val success = try {
+          updateRedisRole(node, RedisRole.Master)
+          setSlaveOf(node, None)
+          true
+        } catch {
+          case e: Exception => false
+        }
+
+        success
+      }
+
+      if(master.isEmpty) {
+        logger.error("All nodes failed to become master on cluster %s, will try again later".format(cluster))
+      }
+
+      master
+    } else {
+      logger.error("There is no node available to be master on cluster %s, will try again later".format(cluster))
+      None
+    }
+  }
+
+  /**
+   * Change redis role, using the slaveof command.
+   */
+  protected def setSlaveOf(node: RedisNode, master: Option[RedisNode]) {
+    try {
+      node.withConnection { connection =>
+        connection.slaveof(master.map(m => (m.host, m.port)).getOrElse(None))
+        logger.info("[Failover: %s] Setting %s to be slave of %s".format(cluster, node, master))
+      }
+    } catch {
+      case ex: Exception =>
+        logger.error("Error setting %s to be slave of %s".format(node, master), ex)
+        updateRedisRole(node, RedisRole.Undefined)
+    }
+  }
+
+  /**
+   * Update redis role on ZK
+   */
+  protected def updateRedisRole(node: RedisNode, newRole: RedisRole) {
+    node.actualRole = newRole
+    val path: String = RedisNode.statusPath(cluster, node)
+    CuratorInstance.createOrSetZkData(path, newRole.toString)
+    logger.debug("[Failover: %s] updated %s role to: %s".format(cluster, node, newRole))
+  }
+
+  /**
+   * If a master is available, set it reference on slaves nodes.
+   */
+  protected def updateSlavesReference(nodes: List[RedisNode]) {
+    if (cluster.isMasterOnline) {
+      nodes.foreach(setSlaveOf(_, cluster.masterOption))
+    }
+  }
+
+  /**
+   * Group slaves by its master.
+   */
+  protected def groupSlaves(nodes: List[RedisNode]) =
+    nodes.groupBy { node =>
+      if (node.status.info.getOrElse("role", "undefined") == "slave") {
+        val host = node.status.info("master_host")
+        val port = node.status.info("master_port").toInt
+        val masterId = RedisNode.nodeId(host, port)
+        cluster.nodes.find(n => n.id == masterId)
+      } else {
+        None
+      }
+    }
+}
+
+class InitialSetupProcessor (val cluster: ClusterDefinition, nodesOffline: List[RedisNode], nodesOnline: List[RedisNode]) extends Process {
+  protected val logger = Logger.getLogger(classOf[InitialSetupProcessor])
+
+  /**
+   * Will try to identify the redis cluster topology, and do a leader election if the
+   * cluster is not configured yet.
+   */
+  def begin(): Boolean = {
+    logger.warn("[Failover: %s] Initiating redis cluster".format(cluster))
+    logger.warn("[Failover: %s] Nodes offline: %s".format(cluster, nodesOffline))
+    logger.warn("[Failover: %s] Nodes online: %s".format(cluster, nodesOnline))
+
+    nodesOffline.foreach{ node =>
+      updateRedisRole(node, Down)
+    }
+
+    val masterOnRedisNodes = nodesOnline.filter(n => n.status.info("role") == "master")
+    val realMaster = masterOnRedisNodes.filter(n => n.actualRole == Master)
+
+    if(realMaster.size != 1) {
+      val candidates = cluster.masterNodes ++ cluster.slaveNodes ++ cluster.undefinedNodes
+      electBestMaster(candidates)
+    }
+    logger.info("Initial Master configured for %s".format(cluster.masterOption))
+
+    updateSlavesReference(cluster.slaveNodes)
+    true
+  }
+}
+
+class FailOverProcessor (val cluster: ClusterDefinition, goingOffline: List[RedisNode], goingOnline: List[RedisNode]) extends Process {
+  protected val logger = Logger.getLogger(classOf[FailOverProcessor])
 
   /**
    * Stats the failover.
@@ -33,70 +165,12 @@ class FailOverProcessor(cluster: ClusterDefinition, goingOffline: List[RedisNode
 
     val doMasterElection = !cluster.isMasterOnline
     if(doMasterElection) {
-      electMaster()
+      electBestMaster(cluster.slaveNodes)
     }
 
-    if(cluster.isMasterOnline) {
-      if(doMasterElection) {
-        cluster.slaveNodes.foreach(setSlaveOf(_, cluster.masterOption))
-      } else {
-        goingOnline.foreach(setSlaveOf(_, cluster.masterOption))
-      }
-    }
+    val slavesToUpdate = if(doMasterElection) cluster.slaveNodes else goingOnline
+    updateSlavesReference(slavesToUpdate)
 
     !doMasterElection || cluster.isMasterOnline
-  }
-
-  /**
-   * This will actually select the best node and update his role to Master
-   * If the elected node fail to change his role, he will be set on the Undefined state,
-   * and another node will be chosen, until one node in good state succeed or no node is available
-   */
-  @tailrec
-  private def electMaster() {
-    //TODO: Improve master election(use more info about slaves to choose from)
-    def chooseMaster: RedisNode = cluster.slaveNodes.head
-    def existsCandidates: Boolean = !cluster.slaveNodes.isEmpty
-
-    if(existsCandidates) {
-      val master = chooseMaster
-
-      updateRedisRole(master, RedisRole.Master)
-      setSlaveOf(master, None)
-
-      // Check if it was successful
-      if(!cluster.isMasterOnline) {
-        electMaster()
-      }
-    } else {
-      logger.error("There is no node available to be master on cluster %s, will try again later".format(cluster))
-    }
-  }
-
-  /**
-   * Change redis role, using the slaveof command.
-   */
-  private def setSlaveOf(node: RedisNode, master: Option[RedisNode]) {
-    try {
-      node.withConnection { connection =>
-        connection.slaveof(master.map(m => (m.host, m.port)).getOrElse(None))
-      }
-    } catch {
-      case ex: Exception =>
-        logger.error("Error updating slaveOf %s to %s, reason: %s".format(node, master, ex.getMessage))
-        updateRedisRole(node, RedisRole.Undefined)
-    }
-  }
-
-  /**
-   * Update redis role on ZK
-   */
-  private def updateRedisRole(node: RedisNode, newRole: RedisRole) {
-    node.actualRole = newRole
-
-    val path = s"/rediskeeper/clusters/${cluster.name}/nodes/${node.id}"
-    CuratorInstance.createOrSetZkData(path, newRole.toString)
-
-    logger.debug("[Failover: %s] updated %s role to: %s".format(cluster, node, newRole))
   }
 }

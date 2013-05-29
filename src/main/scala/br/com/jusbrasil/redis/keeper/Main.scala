@@ -39,8 +39,10 @@ object Main extends App {
 
   def scheduleTicks() {
     import system.dispatcher
+
     val tickInterval: FiniteDuration = Duration(clusterConfig.tick, SECONDS)
     system.scheduler.schedule(0 milliseconds, tickInterval, leaderActor, Tick(tickInterval))
+
     val failoverTickInterval: FiniteDuration = Duration(clusterConfig.failoverTick, SECONDS)
     system.scheduler.schedule(failoverTickInterval * 2, failoverTickInterval, leaderActor, FailoverTick)
   }
@@ -54,20 +56,20 @@ object Main extends App {
     clusterDef
   }
 
-
   def createNode(node: NodeConf): RedisNode = {
     val redisNode = RedisNode(node.host, node.port)
-    redisNode.actor = system.actorOf(Props(new NodeWatcherActor(redisNode)))
+    redisNode.actor = system.actorOf(Props(new RedisNodeWatcherActor(redisNode)))
     redisNode
   }
+
   def getClusterConfig: Conf = {
     val text =
       """
         |tick: 1
-        |failoverTick: 5
+        |failoverTick: 20
         |clusters:
         | - name: webpy
-        |   timeToMarkAsDown: 15
+        |   timeToMarkAsDown: 10
         |   nodes:
         |    - {host: 192.168.1.10, port: 6371}
         |    - {host: 192.168.1.10, port: 6372}

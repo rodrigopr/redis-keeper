@@ -34,15 +34,22 @@ case class RedisNode(host: String, port: Int) {
 }
 
 object RedisNode {
-  def path(cluster: ClusterDefinition, node: RedisNode): String =
-    s"/rediskeeper/clusters/${cluster.name}/nodes/${node.id}"
+  def nodeId(host: String, port: Int) = "%s:%d".format(host,port)
 
-  def statusPath(cluster: ClusterDefinition, node: RedisNode, keeperId: String): String =
-    s"/rediskeeper/clusters/${cluster.name}/nodes/${node.id}/$keeperId"
+  def statusPath(cluster: ClusterDefinition, node: RedisNode): String =
+    s"/rediskeeper/clusters/${cluster.name}/nodes/${node.id}/status"
+
+  def detailPath(cluster: ClusterDefinition, node: RedisNode, keeperId: String): String =
+    s"/rediskeeper/clusters/${cluster.name}/nodes/${node.id}/detail/$keeperId"
+
+  def offlinePath(cluster: ClusterDefinition, node: RedisNode, keeperId: String): String =
+    s"/rediskeeper/clusters/${cluster.name}/nodes/${node.id}/status/$keeperId"
+
+
 }
 
-class NodeWatcherActor(node: RedisNode) extends Actor {
-  private val logger = Logger.getLogger(classOf[NodeWatcherActor])
+class RedisNodeWatcherActor(node: RedisNode) extends Actor {
+  private val logger = Logger.getLogger(classOf[RedisNodeWatcherActor])
 
   def receive = {
     case Tick(t) => updateRedisInfo(t)
@@ -86,7 +93,7 @@ class NodeWatcherActor(node: RedisNode) extends Actor {
       }
     } catch {
       case e: Exception =>
-        logger.info("Timeout get info from: %s".format(node))
+        logger.trace("Timeout getting info from: %s".format(node))
     }
   }
 }

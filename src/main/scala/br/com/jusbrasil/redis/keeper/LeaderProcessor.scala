@@ -34,7 +34,6 @@ class LeaderProcessor(clusters: List[ClusterDefinition], leaderActor: ActorRef) 
   }
 
   def isLeader = leaderLatch.hasLeadership
-
   def numParticipants = leaderLatch.getParticipants.size()
 
   /**
@@ -48,7 +47,7 @@ class LeaderProcessor(clusters: List[ClusterDefinition], leaderActor: ActorRef) 
     CuratorInstance.ensureZKPath("/rediskeeper/clusters")
 
     def configNode(cluster: ClusterMeta.ClusterDefinition)(node: RedisNode) {
-      val path = RedisNode.path(cluster, node)
+      val path = RedisNode.statusPath(cluster, node)
       if (!CuratorInstance.exists(path)) {
         CuratorInstance.createOrSetZkData(path, RedisRole.Undefined.toString)
       } else {
@@ -78,7 +77,7 @@ class LeaderProcessor(clusters: List[ClusterDefinition], leaderActor: ActorRef) 
     //TODO: check for configuration on ZK, the leader`s configuration should match.
   }
 
-  def executeFailover(cluster: ClusterDefinition, failover: FailOverProcessor) {
+  def executeClusterProcess(cluster: ClusterDefinition, failover: Process) {
     try {
       /**
        * TODO: Better failover transaction using ZK,

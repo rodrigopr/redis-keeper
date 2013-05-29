@@ -65,17 +65,45 @@ class RedisClusterActor(clusterDef: ClusterDefinition) extends Actor with FSM[Cl
         goto(ProcessingFailover)
       else
         stay()
+
+    /** Setup initial cluster configuration, using data gathered from redis cluster */
+    case Event(InitClusterSetup(leader), _) =>
+      initRedisCluster(leader)
+      goto(ProcessingFailover)
   }
 
   /**
    * Wait into this state until it finishes the failover process
    */
-  when(ProcessingFailover) {
-    case Event(FailoverFinished, _) => goto(Monitoring)
+  when(ProcessingFailover, stateTimeout = 5.minute) {
+    //TODO: better handle failover timeouts
+    case Event(StateTimeout | FailoverFinished, _) => goto(Monitoring)
   }
 
   whenUnhandled {
     case x => logger.warn("%s not handled at state %s".format(x, stateName)); stay()
+  }
+
+  /**
+   * Start the initial setup process, using the online/offline nodes.
+   */
+  def initRedisCluster(leader: LeaderProcessor) {
+    val nodesOffline = mutable.ArrayBuffer[RedisNode]()
+    val nodesOnline = mutable.ArrayBuffer[RedisNode]()
+
+    val onlineKeepers: Int = leader.numParticipants
+
+    clusterDef.nodes.foreach { node =>
+      val (hasConsensusIsDown, _) = checkRedisGlobalStatus(node, onlineKeepers)
+      if(hasConsensusIsDown) {
+        nodesOffline.append(node)
+      } else {
+        nodesOnline.append(node)
+      }
+    }
+
+    val processor = new InitialSetupProcessor(clusterDef, nodesOffline.toList, nodesOnline.toList)
+    leader.executeClusterProcess(clusterDef, processor)
   }
 
   /**
@@ -86,33 +114,43 @@ class RedisClusterActor(clusterDef: ClusterDefinition) extends Actor with FSM[Cl
   def processFailover(leader: LeaderProcessor): Boolean = {
     val goingOffline = mutable.ArrayBuffer[RedisNode]()
     val goingOnline = mutable.ArrayBuffer[RedisNode]()
-    val onlineKeepers: Int = leader.numParticipants
 
+    val onlineKeepers: Int = leader.numParticipants
     // Check status of each node
     clusterDef.nodes.foreach { node =>
-      val path: String = RedisNode.path(clusterDef, node)
+      val (hasConsensusIsDown, actualRoleZk) = checkRedisGlobalStatus(node, onlineKeepers)
 
-      val whoMarkAsDown = CuratorInstance.getChildren(path)
-      val hasConsensusIsDown = whoMarkAsDown.size >= (onlineKeepers / 2.0)
-
-      val actualRole = RedisRole.withName(CuratorInstance.getData(path))
-      val isDown: Boolean = actualRole == RedisRole.Down
-      val isUnassigned = actualRole == RedisRole.Undefined
+      val currentStatusIsDown = actualRoleZk == RedisRole.Down
+      val currentStatusIsUndefined = actualRoleZk == RedisRole.Undefined
 
       if (hasConsensusIsDown) {
-        if (!isDown) {
+        if (!currentStatusIsDown) {
           goingOffline.append(node)
         }
-      } else if (isDown || isUnassigned) {
+      } else if (currentStatusIsDown || currentStatusIsUndefined) {
         goingOnline.append(node)
       }
     }
 
-    if (!goingOffline.isEmpty || !goingOnline.isEmpty) {
+    val doFailover = !goingOffline.isEmpty || !goingOnline.isEmpty
+
+    if (doFailover) {
       val failover = new FailOverProcessor(clusterDef, goingOffline.toList, goingOnline.toList)
-      leader.executeFailover(clusterDef, failover)
-      true
-    } else false
+      leader.executeClusterProcess(clusterDef, failover)
+    }
+
+    doFailover
+  }
+
+  def checkRedisGlobalStatus(node: RedisNode, onlineKeepers: Int) = {
+    val path: String = RedisNode.statusPath(clusterDef, node)
+
+    val whoMarkAsDown = CuratorInstance.getChildren(path)
+    val hasConsensusIsDown = whoMarkAsDown.size >= (onlineKeepers / 2.0)
+
+    val actualRole = RedisRole.withName(CuratorInstance.getData(path))
+
+    (hasConsensusIsDown, actualRole)
   }
 
   /**
@@ -124,20 +162,30 @@ class RedisClusterActor(clusterDef: ClusterDefinition) extends Actor with FSM[Cl
       (lastSeen.getTime + clusterDef.timeToMarkAsDown.toMillis) >= System.currentTimeMillis
     }
 
-    val offlineNodes = clusterDef.onlineNodes.filterNot(isOnline).toList
+    val offlineNodes = clusterDef.nodes.filterNot(isOnline).toList
     val backOnlineNodes = clusterDef.offlineNodes.filter(isOnline).toList
 
-    offlineNodes.foreach{ node =>
-      logger.warn("Node going offline: %s on cluster %s".format(node, clusterDef))
+    offlineNodes.foreach { node =>
+      if(node.status.isOnline) {
+        logger.warn("Node going offline: %s on cluster %s".format(node, clusterDef))
+      }
       val timeStr = node.status.lastSeenOnline.getTime.toString
-      CuratorInstance.createOrSetZkData(RedisNode.statusPath(clusterDef, node, Keeper.id), timeStr, ephemeral=true)
+      val path: String = RedisNode.offlinePath(clusterDef, node, Keeper.id)
+      CuratorInstance.createOrSetZkData(path, timeStr, ephemeral=true)
       node.status.isOnline = false
     }
 
     backOnlineNodes.foreach{ node =>
       logger.warn("Node going online: %s on cluster %s".format(node, clusterDef))
-      CuratorInstance.deleteZkData(RedisNode.statusPath(clusterDef, node, Keeper.id))
+      CuratorInstance.deleteZkData(RedisNode.offlinePath(clusterDef, node, Keeper.id))
       node.status.isOnline = true
+    }
+
+    // Update info on ZK.
+    clusterDef.onlineNodes.foreach { node =>
+      import argonaut.Argonaut._
+      val path = RedisNode.detailPath(clusterDef, node, Keeper.id)
+      CuratorInstance.createOrSetZkData(path, node.status.asJson.nospaces, ephemeral=true)
     }
   }
 

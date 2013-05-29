@@ -1,6 +1,7 @@
 package br.com.jusbrasil.redis.keeper
 
 import java.util.Date
+import argonaut._, Argonaut._
 
 
 object KeeperMode extends Enumeration{
@@ -25,10 +26,23 @@ object RedisRole extends Enumeration {
   val Down = Value
 }
 
-class RedisNodeStatus {
-  var isOnline: Boolean = true
-  var lastSeenOnline: Date = new Date()
+case class RedisNodeStatus(
+  var isOnline: Boolean = true,
+  var lastSeenOnline: Date = new Date(),
   var info: Map[String, String] = Map()
+)
+
+object RedisNodeStatus {
+  implicit val dateEncodeJson: EncodeJson[Date] = EncodeJson (
+    (d: Date) => ("time" := d.getTime) ->: jEmptyObject
+  )
+
+  implicit val dateDecodeJson: DecodeJson[Date] = DecodeJson (
+    d => for { time <- (d --\ "time").as[Long]} yield new Date(time)
+  )
+
+  implicit def RedisNodeStatusCodecJson: CodecJson[RedisNodeStatus] =
+    casecodec3(RedisNodeStatus.apply, RedisNodeStatus.unapply)("is_online", "number", "info")
 }
 
 import scala.beans.BeanProperty
