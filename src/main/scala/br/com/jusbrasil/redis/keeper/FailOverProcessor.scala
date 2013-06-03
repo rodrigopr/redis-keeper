@@ -1,6 +1,5 @@
 package br.com.jusbrasil.redis.keeper
 
-import br.com.jusbrasil.redis.keeper.ClusterMeta.ClusterDefinition
 import br.com.jusbrasil.redis.keeper.RedisRole._
 import org.apache.log4j.Logger
 import scala._
@@ -10,6 +9,7 @@ import scala.Some
 trait Process {
   protected val logger: Logger
   protected val cluster: ClusterDefinition
+  protected val keeper: KeeperProcessor
 
   def begin(): Boolean
 
@@ -76,9 +76,8 @@ trait Process {
    * Update redis role on ZK
    */
   protected def updateRedisRole(node: RedisNode, newRole: RedisRole) {
+    keeper.updateNodeRoleOnZK(cluster, node, newRole)
     node.actualRole = newRole
-    val path: String = RedisNode.statusPath(cluster, node)
-    CuratorInstance.createOrSetZkData(path, newRole.toString)
     logger.debug("[Failover: %s] updated %s role to: %s".format(cluster, node, newRole))
   }
 
@@ -107,7 +106,11 @@ trait Process {
     }
 }
 
-class InitialSetupProcessor (val cluster: ClusterDefinition, nodesOffline: List[RedisNode], nodesOnline: List[RedisNode]) extends Process {
+class InitialSetupProcessor (
+    val keeper: KeeperProcessor,
+    val cluster: ClusterDefinition,
+    nodesOffline: List[RedisNode],
+    nodesOnline: List[RedisNode]) extends Process {
   protected val logger = Logger.getLogger(classOf[InitialSetupProcessor])
 
   /**
@@ -127,8 +130,7 @@ class InitialSetupProcessor (val cluster: ClusterDefinition, nodesOffline: List[
     val realMaster = masterOnRedisNodes.filter(n => n.actualRole == Master)
 
     if(realMaster.size != 1) {
-      val candidates = cluster.masterNodes ++ cluster.slaveNodes ++ cluster.undefinedNodes
-      electBestMaster(candidates)
+      electBestMaster(nodesOnline)
     }
     logger.info("Initial Master configured for %s".format(cluster.masterOption))
 
@@ -137,7 +139,11 @@ class InitialSetupProcessor (val cluster: ClusterDefinition, nodesOffline: List[
   }
 }
 
-class FailOverProcessor (val cluster: ClusterDefinition, goingOffline: List[RedisNode], goingOnline: List[RedisNode]) extends Process {
+class FailOverProcessor (
+    val keeper: KeeperProcessor,
+    val cluster: ClusterDefinition,
+    goingOffline: List[RedisNode],
+    goingOnline: List[RedisNode]) extends Process {
   protected val logger = Logger.getLogger(classOf[FailOverProcessor])
 
   /**

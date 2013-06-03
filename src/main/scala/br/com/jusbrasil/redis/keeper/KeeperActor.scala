@@ -3,20 +3,23 @@ package br.com.jusbrasil.redis.keeper
 import akka.actor._
 import org.apache.log4j.Logger
 
-object KeeperMeta {
-  sealed trait KeeperState
-  case object StartingState extends KeeperState
-  case object RunningWorkerState extends KeeperState
-  case object StartingLeaderState extends KeeperState
-  case object RunningLeaderState extends KeeperState
+object KeeperActor {
+  object KeeperState extends Enumeration {
+    type KeeperState = Value
+    val StartingState = Value
+    val RunningWorkerState = Value
+    val StartingLeaderState = Value
+    val RunningLeaderState = Value
+  }
 
   sealed trait KeeperData
   case object UninitializedKeeper extends KeeperData
-  case class KeeperConfiguration(leader: LeaderProcessor, clusters: List[ClusterMeta.ClusterDefinition]) extends KeeperData
+  case class KeeperConfiguration(leader: KeeperProcessor, clusters: List[ClusterDefinition]) extends KeeperData
 }
-import KeeperMeta._
+import KeeperActor._
+import KeeperActor.KeeperState._
 
-class KeeperActor(conf: Conf) extends Actor with FSM[KeeperState, KeeperData] {
+class KeeperActor(conf: KeeperConfig) extends Actor with FSM[KeeperState, KeeperData] {
   private val logger = Logger.getLogger(classOf[KeeperActor])
   startWith(StartingState, UninitializedKeeper)
 
@@ -78,12 +81,10 @@ class KeeperActor(conf: Conf) extends Actor with FSM[KeeperState, KeeperData] {
       }
       stay()
 
-    case x => logger.info("%s not handled at state %s".format(x, stateName)); stay()
+    case Event(message, keeperConf: KeeperConfiguration) =>
+      logger.info("[Keeper-%s] %s not handled at state %s".format(keeperConf.leader.id, message, stateName))
+      stay()
   }
 
   initialize
-}
-
-object Keeper {
-  var id: String = _
 }
