@@ -119,7 +119,7 @@ class RedisClusterActor(cluster: ClusterDefinition, keeper: KeeperProcessor) ext
   def updateNodesStatus() {
     def isOnline(node: RedisNode): Boolean = {
       val lastSeen = node.status.lastSeenOnline
-      (lastSeen.getTime + cluster.timeToMarkAsDown.toMillis) >= System.currentTimeMillis
+      lastSeen.getTime + cluster.timeToMarkAsDown.toMillis >= System.currentTimeMillis
     }
 
     val offlineNodes = cluster.nodes.filterNot(isOnline).toList

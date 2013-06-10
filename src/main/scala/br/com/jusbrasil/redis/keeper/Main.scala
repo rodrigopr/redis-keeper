@@ -3,6 +3,7 @@ package br.com.jusbrasil.redis.keeper
 import akka.actor.{ActorRef, Props, ActorSystem}
 import scala.concurrent.duration._
 import br.com.jusbrasil.redis.keeper.KeeperActor.KeeperConfiguration
+import scala.io.Source
 
 class Main(val keeperConfig: KeeperConfig) {
   private var isOnline = false
@@ -71,33 +72,18 @@ class Main(val keeperConfig: KeeperConfig) {
 
 /** Test class */
 object Main extends App {
-  private val keeperConfig = getClusterConfig
+  if(args.isEmpty) {
+    println("Usage: bin/keeper.sh path-to-keeper.conf")
+    sys.exit(1)
+  }
+  
+  private val keeperConfig = {
+    val conf = Source.fromFile(args(0)).mkString
+
+    import argonaut.Argonaut._
+    conf.decodeEither[KeeperConfig].getOrElse(throw new RuntimeException)
+  }
 
   val process = new Main(keeperConfig)
   process.start()
-
-  def getClusterConfig: KeeperConfig = {
-    val text =
-      """
-        |{
-        | "keeper-id": "keeper-1",
-        | "tick": 1,
-        | "failover-tick": 20,
-        | "clusters": [
-        |   {
-        |     "name": "webpy",
-        |     "nodes": [
-        |       {"host": "192.168.1.10", "port": 6371},
-        |       {"host": "192.168.1.10", "port": 6372},
-        |       {"host": "192.168.1.10", "port": 6373},
-        |       {"host": "192.168.1.10", "port": 6374}
-        |     ]
-        |   }
-        | ]
-        |}
-      """.stripMargin
-
-    import argonaut.Argonaut._
-    text.decodeEither[KeeperConfig].getOrElse(throw new RuntimeException)
-  }
 }

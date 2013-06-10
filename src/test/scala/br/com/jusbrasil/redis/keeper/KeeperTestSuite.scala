@@ -1,152 +1,8 @@
 package br.com.jusbrasil.redis.keeper
 
 import org.scalatest._
-import com.netflix.curator.test.TestingServer
-import scala.sys.process._
-import scala.collection.mutable
-import org.apache.log4j.Logger
-import scala.util.Try
-import java.nio.file.Paths
-import org.apache.zookeeper.ZooKeeper
 
-class RedisProcess(val port: Int) {
-  protected val logger = Logger.getLogger(classOf[RedisProcess])
-  private val redisPath = "/usr/local/bin/redis-server"
-  val outputLog = new mutable.ListBuffer[String]
-  val errorLog = new mutable.ListBuffer[String]
-
-  private val currentRelativePath = Paths.get("")
-  private val absolutePath = currentRelativePath.toAbsolutePath.toString
-  private val configFile: String = s"$absolutePath/src/test/conf/redis_$port.conf"
-
-  private var running = false
-  private var process: scala.sys.process.Process = _
-  start()
-
-  def start() {
-    if(!running) {
-      outputLog.clear()
-      errorLog.clear()
-      process =
-        Seq("sh", "-c", s"$redisPath $configFile").run(new ProcessLogger {
-          def buffer[T](f: => T): T = f
-
-          def out(s: => String) {
-            outputLog.+=:(s)
-          }
-
-          def err(s: => String) {
-            errorLog.+=:(s)
-            logger.error("[Redis %s] %s".format(port, s))
-          }
-        })
-
-      running = true
-    }
-  }
-
-
-  def stopProcess() {
-    Try {
-      RedisNode("127.0.0.1", port).withConnection { conn =>
-        conn.shutdown
-      }
-      process.exitValue()
-    } recover {
-      case _ => process.destroy()
-    }
-    running = false
-  }
-
-  override def toString = s"Redis-$port"
-}
-
-trait KeeperBaseTestSuite extends AbstractSuite { this: Suite =>
-  protected val logger = Logger.getLogger(classOf[KeeperBaseTestSuite])
-  var zkServer: TestingServer = _
-  var zkClient: CuratorWrapper = _
-  var zkQuorum: String = _
-
-  abstract override def withFixture(test: NoArgTest) {
-    restartZookeeperServer()
-    try {
-      super.withFixture(test)
-    }  finally {
-      closeZookeeperServer()
-    }
-  }
-
-  def restartZookeeperServer() {
-    closeZookeeperServer()
-    zkServer = new TestingServer()
-    zkQuorum = zkServer.getConnectString
-    zkClient = new CuratorWrapper(zkQuorum)
-    zkClient.init()
-  }
-
-  def closeZookeeperServer() {
-    Try { zkClient.stop() }
-    Try { zkServer.stop() }
-  }
-
-  def withRedisInstancesOn(ports: Int*)(fn: Map[Int, RedisProcess] => Unit) {
-    val processMap = Set(ports:_*).map{ p => (p, new RedisProcess(p)) }.toMap
-    try {
-      fn(processMap)
-    } finally {
-      processMap.values.foreach { p =>
-        try
-          p.stopProcess()
-        catch {
-          case e: Exception =>
-            logger.error(s"Error stopping process $p", e)
-            val errLog = p.errorLog.take(20).map(s"[Err-$p] " +).mkString("\n")
-            val outLog = p.outputLog.take(20).map(s"[Out-$p] " +).mkString("\n")
-            logger.info(s"Last message from $p process: \n$outLog \n$errLog")
-        }
-      }
-    }
-  }
-
-  def withRedisInstancesOff(processes: RedisProcess*)(fn: => Unit) {
-    processes.foreach(_.stopProcess())
-    try {
-      fn
-    } finally {
-      processes.foreach(_.start())
-    }
-  }
-
-  def withKeepersOn(configs: KeeperConfig*)(fn: Map[String, Main] => Unit) {
-    val processMap = configs.map{ c => c.keeperId -> new Main(c) }.toMap
-    try {
-      processMap.values.foreach(_.start())
-      fn(processMap)
-    } finally {
-      processMap.values.foreach { p =>
-        p.shutdown()
-      }
-    }
-  }
-
-  def withKeeperOff(keepers: Main*)(fn: => Unit) {
-    keepers.foreach(_.shutdown())
-    try {
-      fn
-    } finally {
-      keepers.foreach(_.start())
-    }
-  }
-
-  def invalidSession(keeper: Main) {
-    logger.info("Invaliding session %s".format(keeper.keeperConfig.keeperId))
-    val (sessionData, sessionPassword) = keeper.getKeeperProcessor.curatorSessionInfo
-    val zk = new ZooKeeper(zkQuorum, 10000, null, sessionData, sessionPassword)
-    zk.close()
-  }
-}
-
-class ClusterTestSuite extends FlatSpec with KeeperBaseTestSuite {
+class KeeperTestSuite extends FlatSpec with KeeperBaseTestSuite {
   val node1 = RedisNode("127.0.0.1", 7341)
   val node2 = RedisNode("127.0.0.1", 7342)
   val node3 = RedisNode("127.0.0.1", 7343)
@@ -330,7 +186,6 @@ class ClusterTestSuite extends FlatSpec with KeeperBaseTestSuite {
     }
   }
 
-
   def assertNodeRole(cluster: ClusterDefinition, node: RedisNode, expectedRole: String) {
     val role = zkClient.getData(RedisNode.statusPath(cluster, node))
     assert(role === expectedRole)
@@ -338,7 +193,7 @@ class ClusterTestSuite extends FlatSpec with KeeperBaseTestSuite {
 
   private def defaultConfig(keeperId: String) = {
     val clusterCopy = cluster.copy(nodes=List(node1.copy(), node2.copy(), node3.copy()))
-    val conf = KeeperConfig(keeperId, 1, 5, 2, List(zkQuorum), List(clusterCopy))
+    val conf = KeeperConfig(keeperId, 1, 5, 2, List(zkQuorum), "/rediskeeper", List(clusterCopy))
     conf
   }
 }

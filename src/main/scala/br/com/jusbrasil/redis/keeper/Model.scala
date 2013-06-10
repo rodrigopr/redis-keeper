@@ -85,6 +85,8 @@ case class ClusterDefinition(name: String, nodes: List[RedisNode]) {
   var actor: ActorRef = _
   var timeToMarkAsDown: FiniteDuration = _
 
+  def getCurrentStatus = ClusterStatus(masterOption, slaveNodes)
+
   /** Filter by role */
   def masterNodes = nodes.filter(_.actualRole == RedisRole.Master)
   def slaveNodes = nodes.filter(_.actualRole == RedisRole.Slave)
@@ -115,9 +117,16 @@ case class KeeperConfig (
   failoverTick: Int,
   timeToMarkAsDown: Int,
   zkQuorum: List[String],
+  zkPrefix: String,
   clusters: List[ClusterDefinition]
 )
 object KeeperConfig {
   implicit def KeeperConfigCodecJson: CodecJson[KeeperConfig] =
-    casecodec6(KeeperConfig.apply, KeeperConfig.unapply)("keeper-id", "tick", "failover-tick", "time-mark-down",  "zk-quorum", "clusters")
+    casecodec7(KeeperConfig.apply, KeeperConfig.unapply)("keeper-id", "tick", "failover-tick", "time-mark-down",  "zk-quorum", "zk-prefix", "clusters")
+}
+
+case class ClusterStatus(master: Option[RedisNode], slaves: List[RedisNode])
+object ClusterStatus {
+  implicit def ClusterStatusCodecJson: CodecJson[ClusterStatus] =
+    casecodec2(ClusterStatus.apply, ClusterStatus.unapply)("master", "slaves")
 }

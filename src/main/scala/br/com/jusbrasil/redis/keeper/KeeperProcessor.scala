@@ -10,16 +10,16 @@ import RedisRole._
 import org.apache.zookeeper.{WatchedEvent, Watcher}
 import org.apache.log4j.Logger
 import java.util.concurrent.atomic.AtomicLong
+import scala.util.Try
 
 class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
   val id = keeperConfig.keeperId
   private val logger = Logger.getLogger(classOf[KeeperProcessor])
-  private val curatorWrapper = new CuratorWrapper(keeperConfig.zkQuorum.mkString(","))
+  private val curatorWrapper = new CuratorWrapper(keeperConfig.zkQuorum.mkString(","), keeperConfig.zkPrefix)
   curatorWrapper.init()
 
   private val initializeBarrier = new DistributedBarrier(curatorWrapper.instance, "/rediskeeper/initialize-barrier")
-  private val leaderLatch = new LeaderLatch(curatorWrapper.instance, "/rediskeeper/leader", keeperConfig.keeperId)
-  leaderLatch.start()
+  private var leaderLatch: LeaderLatch = _
 
   /**
    * Run election asynchronously,
@@ -27,28 +27,33 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
    * When acquire the leadership it will configure the cluster on ZK, and notify the keeperActor.
    */
   def runAsyncElection() {
+    leaderLatch = new LeaderLatch(curatorWrapper.instance, "/rediskeeper/leader", keeperConfig.keeperId)
+    leaderLatch.start()
+
     Future {
       leaderLatch.await()
 
-      numParticipants.set(leaderLatch.getParticipants.size())
-      val watcher = new Watcher {
-        override def process(event: WatchedEvent) {
-          try {
-            numParticipants.set(leaderLatch.getParticipants.size())
-          } catch{ case ex: Exception =>
-            logger.error("An error occurred updating number of online keepers.", ex)
+      try {
+        numParticipants.set(leaderLatch.getParticipants.size())
+
+        val watcher = new Watcher {
+          override def process(event: WatchedEvent) {
+            try {
+              numParticipants.set(leaderLatch.getParticipants.size())
+            } catch{ case ex: Exception =>
+              logger.error("An error occurred updating number of online keepers.", ex)
+            }
           }
         }
-      }
+        curatorWrapper.instance.getChildren.usingWatcher(watcher).inBackground().forPath("/leader")
 
-      curatorWrapper.instance.getChildren.usingWatcher(watcher).inBackground().forPath("/leader")
-
-      try {
         configure()
         leaderActor ! KeeperConfiguration(this, keeperConfig.clusters)
       } catch {
-        // If failed to configure, should leave the leadership
+        // If failed to configure, should leave the leadership and try again
         case e: Exception =>
+          leaderLatch.close()
+          runAsyncElection()
       }
     }
   }
@@ -80,6 +85,15 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
        */
 
       failover.begin()
+
+      try {
+        import argonaut.Argonaut._
+        val jsonStatus = cluster.getCurrentStatus.asJson.nospaces
+        curatorWrapper.createOrSetZkData("/clusters/%s".format(cluster.name), jsonStatus)
+      } catch {
+        case e: Exception =>
+          logger.error("Error updating cluster %s status".format(cluster), e)
+      }
     } finally {
       cluster.actor ! FailoverFinished
     }
@@ -93,7 +107,7 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
     val path = RedisNode.statusPath(cluster, node)
     val whoMarkAsDown = curatorWrapper.getChildren(path)
 
-    val hasConsensusIsDown = whoMarkAsDown.size >= (numParticipants.get / 2.0)
+    val hasConsensusIsDown = whoMarkAsDown.size >= numParticipants.get / 2.0
     val actualRole = RedisRole.withName(curatorWrapper.getData(path))
 
     (hasConsensusIsDown, actualRole)
