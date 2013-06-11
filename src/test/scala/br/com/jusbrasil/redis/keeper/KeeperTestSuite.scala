@@ -186,6 +186,7 @@ class KeeperTestSuite extends FlatSpec with KeeperBaseTestSuite {
     }
   }
 
+
   def assertNodeRole(cluster: ClusterDefinition, node: RedisNode, expectedRole: String) {
     val role = zkClient.getData(RedisNode.statusPath(cluster, node))
     assert(role === expectedRole)

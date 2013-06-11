@@ -1,8 +1,8 @@
 package br.com.jusbrasil.redis.keeper
 
-import akka.actor.{FSM, Actor}
+import akka.actor.{ FSM, Actor }
 import scala.concurrent.duration._
-import scala.concurrent.{Future, Await}
+import scala.concurrent.{ Future, Await }
 import scala.concurrent.ExecutionContext.Implicits.global
 import akka.pattern._
 import collection.mutable
@@ -35,7 +35,7 @@ class RedisClusterActor(cluster: ClusterDefinition, keeper: KeeperProcessor) ext
     case Event(CheckFailover(leader), _) =>
       val willDoFailover = processFailover(leader)
 
-      if(willDoFailover)
+      if (willDoFailover)
         goto(ProcessingFailover)
       else
         stay()
@@ -69,7 +69,7 @@ class RedisClusterActor(cluster: ClusterDefinition, keeper: KeeperProcessor) ext
 
     cluster.nodes.foreach { node =>
       val (hasConsensusIsDown, _) = keeper.getConsensusAboutNodeStatus(cluster, node)
-      if(hasConsensusIsDown) {
+      if (hasConsensusIsDown) {
         nodesOffline.append(node)
       } else {
         nodesOnline.append(node)
@@ -126,16 +126,16 @@ class RedisClusterActor(cluster: ClusterDefinition, keeper: KeeperProcessor) ext
     val backOnlineNodes = cluster.offlineNodes.filter(isOnline).toList
 
     offlineNodes.foreach { node =>
-      if(node.status.isOnline) {
+      if (node.status.isOnline) {
         logger.warn("Node going offline: %s on cluster %s for keeper %s".format(node, cluster, keeper.id))
       }
-      keeper.updateNodeStatusOnZK(cluster, node, isOnline=false)
+      keeper.updateNodeStatusOnZK(cluster, node, isOnline = false)
       node.status.isOnline = false
     }
 
     backOnlineNodes.foreach{ node =>
       logger.warn("Node going online: %s on cluster %s for keeper %s".format(node, cluster, keeper.id))
-      keeper.updateNodeStatusOnZK(cluster, node, isOnline=true)
+      keeper.updateNodeStatusOnZK(cluster, node, isOnline = true)
       node.status.isOnline = true
     }
   }

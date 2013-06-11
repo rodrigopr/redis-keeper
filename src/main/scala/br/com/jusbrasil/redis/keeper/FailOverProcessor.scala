@@ -25,7 +25,7 @@ trait Process {
    */
   def electBestMaster(candidates: List[RedisNode]): Option[RedisNode] = {
     val slavesPerMaster = groupSlaves(candidates)
-    if(!candidates.isEmpty) {
+    if (!candidates.isEmpty) {
       val sortedMasters = candidates.sortBy { n =>
         val numberOfSlaves = slavesPerMaster.getOrElse(Some(n), Nil).size
         val uptime = n.status.info.getOrElse("uptime_in_seconds", "0").toInt
@@ -45,7 +45,7 @@ trait Process {
         success
       }
 
-      if(master.isEmpty) {
+      if (master.isEmpty) {
         logger.error("All nodes failed to become master on cluster %s, will try again later".format(cluster))
       }
 
@@ -106,7 +106,7 @@ trait Process {
     }
 }
 
-class InitialSetupProcessor (
+class InitialSetupProcessor(
     val keeper: KeeperProcessor,
     val cluster: ClusterDefinition,
     nodesOffline: List[RedisNode],
@@ -129,7 +129,7 @@ class InitialSetupProcessor (
     val masterOnRedisNodes = nodesOnline.filter(n => n.status.info("role") == "master")
     val realMaster = masterOnRedisNodes.filter(n => n.actualRole == Master)
 
-    if(realMaster.size != 1) {
+    if (realMaster.size != 1) {
       electBestMaster(nodesOnline)
     }
     logger.info("Initial Master configured for %s".format(cluster.masterOption))
@@ -139,7 +139,7 @@ class InitialSetupProcessor (
   }
 }
 
-class FailOverProcessor (
+class FailOverProcessor(
     val keeper: KeeperProcessor,
     val cluster: ClusterDefinition,
     goingOffline: List[RedisNode],
@@ -170,11 +170,11 @@ class FailOverProcessor (
     }
 
     val doMasterElection = !cluster.isMasterOnline
-    if(doMasterElection) {
+    if (doMasterElection) {
       electBestMaster(cluster.slaveNodes)
     }
 
-    val slavesToUpdate = if(doMasterElection) cluster.slaveNodes else goingOnline
+    val slavesToUpdate = if (doMasterElection) cluster.slaveNodes else goingOnline
     updateSlavesReference(slavesToUpdate)
 
     !doMasterElection || cluster.isMasterOnline

@@ -35,7 +35,7 @@ class KeeperActor(conf: KeeperConfig) extends Actor with FSM[KeeperState, Keeper
    */
   when(StartingLeaderState) {
     case Event(f @ FailoverTick, keeperConf: KeeperConfiguration) =>
-      if(!keeperConf.leader.isLeader) {
+      if (!keeperConf.leader.isLeader) {
         goto(RunningWorkerState)
       } else {
         keeperConf.clusters.foreach { cluster =>
@@ -51,7 +51,7 @@ class KeeperActor(conf: KeeperConfig) extends Actor with FSM[KeeperState, Keeper
    */
   when(RunningLeaderState) {
     case Event(f @ FailoverTick, keeperConf: KeeperConfiguration) =>
-      if(!keeperConf.leader.isLeader) {
+      if (!keeperConf.leader.isLeader) {
         goto(RunningWorkerState)
       } else {
         keeperConf.clusters.foreach { cluster =>
@@ -69,7 +69,7 @@ class KeeperActor(conf: KeeperConfig) extends Actor with FSM[KeeperState, Keeper
      * KeeperConfiguration event is triggered when it is first configured or the leadership changed
      */
     case Event(conf @ KeeperConfiguration(leader, _), _) =>
-      val workingState = if(leader.isLeader) StartingLeaderState else RunningWorkerState
+      val workingState = if (leader.isLeader) StartingLeaderState else RunningWorkerState
       goto(workingState) using conf
 
     /**

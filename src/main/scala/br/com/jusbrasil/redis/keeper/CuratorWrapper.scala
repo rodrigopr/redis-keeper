@@ -18,7 +18,7 @@ class CuratorWrapper(zkQuorum: String, prefix: String = "/rediskeeper") {
   }
 
   def buildPath(path: String) = {
-    val suffix = if(!path.startsWith("/")) "/" + path else path
+    val suffix = if (!path.startsWith("/")) "/" + path else path
     prefix + suffix
   }
 
@@ -35,7 +35,7 @@ class CuratorWrapper(zkQuorum: String, prefix: String = "/rediskeeper") {
   }
 
   def createOrSetZkData(path: String, value: String, ephemeral: Boolean = false) {
-    val creationMode = if(ephemeral) CreateMode.EPHEMERAL else CreateMode.PERSISTENT
+    val creationMode = if (ephemeral) CreateMode.EPHEMERAL else CreateMode.PERSISTENT
 
     val setOperation: PathAndBytesable[_] = instance.checkExists().forPath(buildPath(path)) != null match {
       case true => instance.setData()

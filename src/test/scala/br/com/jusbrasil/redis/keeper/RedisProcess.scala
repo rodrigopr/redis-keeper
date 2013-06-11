@@ -1,6 +1,5 @@
 package br.com.jusbrasil.redis.keeper
 
-import java.nio.file.Paths
 import scala.collection.mutable
 import scala.sys.process._
 import scala.util.Try
@@ -12,8 +11,7 @@ class RedisProcess(val port: Int) {
   val outputLog = new mutable.ListBuffer[String]
   val errorLog = new mutable.ListBuffer[String]
 
-  private val absolutePath = Paths.get("").toAbsolutePath.toString
-  private val configFile = s"$absolutePath/src/test/conf/redis_$port.conf"
+  private val configFile = s"src/test/conf/redis_$port.conf"
 
   private var running = false
   private var process: scala.sys.process.Process = _

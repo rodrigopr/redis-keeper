@@ -1,9 +1,9 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<groupId>br.com.jusbrasil</groupId>
-	<artifactId>redis-keeper</artifactId>
-	<version>0.1-SNAPSHOT</version>
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>br.com.jusbrasil</groupId>
+  <artifactId>redis-keeper</artifactId>
+  <version>0.1-SNAPSHOT</version>
 
   <properties>
     <scala.version>2.10.0</scala.version>
@@ -97,12 +97,21 @@
   </dependencies>
 
   <build>
+    <testResources>
+      <testResource>
+        <directory>conf</directory>
+      </testResource>
+      <testResource>
+        <directory>src/test/conf</directory>
+      </testResource>
+    </testResources>
+
     <pluginManagement>
       <plugins>
         <plugin>
           <groupId>org.scala-tools</groupId>
           <artifactId>maven-scala-plugin</artifactId>
-          <version>2.9.1</version>
+          <version>2.15.2</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -111,11 +120,30 @@
         </plugin>
       </plugins>
     </pluginManagement>
+
     <plugins>
       <plugin>
         <groupId>org.scala-tools</groupId>
         <artifactId>maven-scala-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>scala-compile-first</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>add-source</goal>
+              <goal>compile</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>scala-test-compile</id>
+            <phase>process-test-resources</phase>
+            <goals>
+              <goal>testCompile</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -128,24 +156,82 @@
           </execution>
         </executions>
       </plugin>
+
       <plugin>
-        <groupId>org.scalariform</groupId>
-        <artifactId>scalariform-maven-plugin</artifactId>
-        <version>0.1.3</version>
+        <groupId>org.scalatest</groupId>
+        <artifactId>scalatest-maven-plugin</artifactId>
+        <version>1.0-M2</version>
+        <configuration>
+          <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
+          <junitxml>.</junitxml>
+        </configuration>
         <executions>
           <execution>
-            <phase>process-sources</phase>
+            <id>test</id>
             <goals>
-              <goal>format</goal>
+              <goal>test</goal>
             </goals>
-            <configuration>
-              <rewriteArrowSymbols>true</rewriteArrowSymbols>
-              <alignParameters>true</alignParameters>
-              <alignSingleLineCaseStatements>true</alignSingleLineCaseStatements>
-            </configuration>
           </execution>
         </executions>
-        </plugin>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <version>2.1</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <descriptor>assembly/bin.xml</descriptor>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>appassembler-maven-plugin</artifactId>
+        <version>1.1.1</version>
+        <configuration>
+          <defaultJvmSettings>
+            <initialMemorySize>256m</initialMemorySize>
+          </defaultJvmSettings>
+          <extraJvmArguments>-server -Dfile.encoding=UTF-8</extraJvmArguments>
+
+          <copyConfigurationDirectory>true</copyConfigurationDirectory>
+          <configurationDirectory>conf</configurationDirectory>
+          <configurationSourceDirectory>conf</configurationSourceDirectory>
+          <includeConfigurationDirectoryInClasspath>true</includeConfigurationDirectoryInClasspath>
+
+          <binFileExtensions>
+            <unix>.sh</unix>
+          </binFileExtensions>
+
+          <repositoryLayout>flat</repositoryLayout>
+          <repositoryName>lib</repositoryName>
+          <repoPath>lib</repoPath>
+          <programs>
+            <program>
+              <name>redis-keeper</name>
+              <mainClass>br.com.jusbrasil.migration.job.ReprocessDefaultColumn</mainClass>
+              <platforms>
+                <platform>unix</platform>
+              </platforms>
+            </program>
+          </programs>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>assemble</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 </project>

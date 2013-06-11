@@ -122,7 +122,7 @@ case class KeeperConfig (
 )
 object KeeperConfig {
   implicit def KeeperConfigCodecJson: CodecJson[KeeperConfig] =
-    casecodec7(KeeperConfig.apply, KeeperConfig.unapply)("keeper-id", "tick", "failover-tick", "time-mark-down",  "zk-quorum", "zk-prefix", "clusters")
+    casecodec7(KeeperConfig.apply, KeeperConfig.unapply)("keeper-id", "tick-seconds", "failover-tick-seconds", "seconds-mark-down",  "zk-quorum", "zk-prefix", "clusters")
 }
 
 case class ClusterStatus(master: Option[RedisNode], slaves: List[RedisNode])

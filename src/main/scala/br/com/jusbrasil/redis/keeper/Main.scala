@@ -1,6 +1,6 @@
 package br.com.jusbrasil.redis.keeper
 
-import akka.actor.{ActorRef, Props, ActorSystem}
+import akka.actor.{ ActorRef, Props, ActorSystem }
 import scala.concurrent.duration._
 import br.com.jusbrasil.redis.keeper.KeeperActor.KeeperConfiguration
 import scala.io.Source
@@ -22,7 +22,7 @@ class Main(val keeperConfig: KeeperConfig) {
   }
 
   def shutdown() {
-    if(isOnline) {
+    if (isOnline) {
       keeperConfig.clusters.foreach { c =>
         system.stop(c.actor)
         c.nodes.foreach {node =>
@@ -69,14 +69,13 @@ class Main(val keeperConfig: KeeperConfig) {
   }
 }
 
-
 /** Test class */
 object Main extends App {
-  if(args.isEmpty) {
-    println("Usage: bin/keeper.sh path-to-keeper.conf")
+  if (args.isEmpty) {
+    println("Usage: bin/redis-keeper.sh path-to-keeper.conf")
     sys.exit(1)
   }
-  
+
   private val keeperConfig = {
     val conf = Source.fromFile(args(0)).mkString
 

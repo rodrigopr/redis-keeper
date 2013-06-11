@@ -7,10 +7,9 @@ import com.netflix.curator.framework.recipes.leader.LeaderLatch
 import concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import RedisRole._
-import org.apache.zookeeper.{WatchedEvent, Watcher}
+import org.apache.zookeeper.{ WatchedEvent, Watcher }
 import org.apache.log4j.Logger
 import java.util.concurrent.atomic.AtomicLong
-import scala.util.Try
 
 class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
   val id = keeperConfig.keeperId
@@ -40,8 +39,9 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
           override def process(event: WatchedEvent) {
             try {
               numParticipants.set(leaderLatch.getParticipants.size())
-            } catch{ case ex: Exception =>
-              logger.error("An error occurred updating number of online keepers.", ex)
+            } catch{
+              case ex: Exception =>
+                logger.error("An error occurred updating number of online keepers.", ex)
             }
           }
         }
@@ -115,11 +115,11 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
 
   def updateNodeStatusOnZK(cluster: ClusterDefinition, node: RedisNode, isOnline: Boolean) {
     val path: String = RedisNode.offlinePath(cluster, node, keeperConfig.keeperId)
-    if(isOnline) {
+    if (isOnline) {
       curatorWrapper.deleteZkData(path)
     } else {
       val timeStr = node.status.lastSeenOnline.getTime.toString
-      curatorWrapper.createOrSetZkData(path, timeStr, ephemeral=true)
+      curatorWrapper.createOrSetZkData(path, timeStr, ephemeral = true)
     }
   }
 
