@@ -147,7 +147,7 @@ class KeeperTestSuite extends FlatSpec with KeeperBaseTestSuite {
   "RedisKeeper" should "detect offline nodes" in {
 
     withRedisInstancesOn(7341) { _ =>
-      val conf = defaultConfig("keeper1", 86379)
+      val conf = defaultConfig("keeper1", 46379)
 
       withKeepersOn(conf) { _ =>
         Thread.sleep(15000)
@@ -178,9 +178,9 @@ class KeeperTestSuite extends FlatSpec with KeeperBaseTestSuite {
   "RedisKeeper" should "work with multiple keepers" in {
     withRedisInstancesOn(7341) { _ =>
 
-      val conf = defaultConfig("keeper1", 86379)
-      val conf2 = defaultConfig("keeper2", 86378)
-      val conf3 = defaultConfig("keeper3", 86377)
+      val conf = defaultConfig("keeper1", 46379)
+      val conf2 = defaultConfig("keeper2", 46378)
+      val conf3 = defaultConfig("keeper3", 46377)
 
       withKeepersOn(conf, conf2, conf3) { _ =>
         Thread.sleep(15000)
@@ -211,9 +211,9 @@ class KeeperTestSuite extends FlatSpec with KeeperBaseTestSuite {
   "RedisKeeper" should "elect a new master in case of failure" in {
     withRedisInstancesOn(7341, 7343) { redisInstances =>
 
-      val conf = defaultConfig("keeper1", 86379)
-      val conf2 = defaultConfig("keeper2", 86378)
-      val conf3 = defaultConfig("keeper3", 86377)
+      val conf = defaultConfig("keeper1", 46379)
+      val conf2 = defaultConfig("keeper2", 46378)
+      val conf3 = defaultConfig("keeper3", 46377)
 
       withKeepersOn(conf, conf2, conf3) { _ =>
         Thread.sleep(15000)
@@ -250,8 +250,8 @@ class KeeperTestSuite extends FlatSpec with KeeperBaseTestSuite {
   "RedisKeeper" should "handle session expiration" in {
     withRedisInstancesOn(7341, 7343) { redisInstances =>
 
-      val conf = defaultConfig("keeper1", 86379)
-      val conf2 = defaultConfig("keeper2", 86378)
+      val conf = defaultConfig("keeper1", 46379)
+      val conf2 = defaultConfig("keeper2", 46378)
 
       withKeepersOn(conf) { keepers =>
       // Running 2 after to guarantee that keeper1 will get the leadership
@@ -278,10 +278,10 @@ class KeeperTestSuite extends FlatSpec with KeeperBaseTestSuite {
   "RedisKeeper" should "adapt to the number of keepers online" in {
     withRedisInstancesOn(7341, 7343) { redisInstances =>
 
-      val conf = defaultConfig("keeper1", 86379)
-      val conf2 = defaultConfig("keeper2", 86378)
-      val conf3 = defaultConfig("keeper3", 86377)
-      val conf4 = defaultConfig("keeper4", 86376)
+      val conf = defaultConfig("keeper1", 46379)
+      val conf2 = defaultConfig("keeper2", 46378)
+      val conf3 = defaultConfig("keeper3", 46377)
+      val conf4 = defaultConfig("keeper4", 46376)
 
       withKeepersOn(conf, conf2, conf3, conf4) { keepers =>
         Thread.sleep(20000)
