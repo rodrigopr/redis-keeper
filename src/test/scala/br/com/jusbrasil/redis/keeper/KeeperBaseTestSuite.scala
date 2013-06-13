@@ -8,9 +8,22 @@ import org.apache.zookeeper.ZooKeeper
 
 trait KeeperBaseTestSuite extends AbstractSuite { this: Suite =>
   protected val logger = Logger.getLogger(classOf[KeeperBaseTestSuite])
-  var zkServer: TestingServer = _
-  var zkClient: CuratorWrapper = _
-  var zkQuorum: String = _
+
+  val node1 = RedisNode("127.0.0.1", 7341)
+  val node2 = RedisNode("127.0.0.1", 7342)
+  val node3 = RedisNode("127.0.0.1", 7343)
+  val node4 = RedisNode("127.0.0.1", 7344)
+  val cluster = ClusterDefinition("cluster1", List(node1, node2, node3))
+
+  protected def defaultConfig(keeperId: String, restPort: Int = 86379) = {
+    val clusterCopy = cluster.copy(nodes=List(node1.copy(), node2.copy(), node3.copy()))
+    val conf = KeeperConfig(keeperId, 1, 5, 2, List(zkQuorum), "/rediskeeper", restPort, List(clusterCopy))
+    conf
+  }
+
+  private var zkServer: TestingServer = _
+  protected var zkClient: CuratorWrapper = _
+  private var zkQuorum: String = _
 
   abstract override def withFixture(test: NoArgTest) {
     restartZookeeperServer()
@@ -65,7 +78,7 @@ trait KeeperBaseTestSuite extends AbstractSuite { this: Suite =>
   def withKeepersOn(configs: KeeperConfig*)(fn: Map[String, Main] => Unit) {
     val processMap = configs.map{ c => c.keeperId -> new Main(c) }.toMap
     try {
-      processMap.values.foreach(_.start())
+        processMap.values.foreach(_.start())
       fn(processMap)
     } finally {
       processMap.values.foreach { p =>

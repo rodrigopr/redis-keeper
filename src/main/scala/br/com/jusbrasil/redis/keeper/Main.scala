@@ -1,13 +1,19 @@
 package br.com.jusbrasil.redis.keeper
 
-import akka.actor.{ ActorRef, Props, ActorSystem }
-import scala.concurrent.duration._
+import akka.actor.{Props, ActorRef, ActorSystem}
+import akka.io.IO
+import akka.pattern._
 import br.com.jusbrasil.redis.keeper.KeeperActor.KeeperConfiguration
+import br.com.jusbrasil.redis.keeper.rest.KeeperRestService
+import scala.concurrent.duration._
 import scala.io.Source
+import spray.can.Http
+import scala.concurrent.Await
+import akka.util.Timeout
 
 class Main(val keeperConfig: KeeperConfig) {
   private var isOnline = false
-  private var system: ActorSystem = _
+  private implicit var system: ActorSystem = _
   private var keeper: KeeperProcessor = _
 
   def getKeeperProcessor = keeper
@@ -17,8 +23,14 @@ class Main(val keeperConfig: KeeperConfig) {
     val keeperActor = system.actorOf(Props(new KeeperActor(keeperConfig)), "keeper")
 
     createLeaderProcessor(keeperActor)
+    createRestApi()
 
     isOnline = true
+  }
+
+  def createRestApi() {
+    val service = system.actorOf(Props(new KeeperRestService(keeper)), "rest-service")
+    IO(Http) ! Http.Bind(service, "localhost", keeperConfig.restPort)
   }
 
   def shutdown() {
@@ -29,6 +41,10 @@ class Main(val keeperConfig: KeeperConfig) {
           system.stop(node.actor)
         }
       }
+
+      implicit val timeout: Timeout = 10.seconds
+      Await.result(IO(Http) ? Http.CloseAll, timeout.duration)
+
       system.shutdown()
       system.awaitTermination()
       keeper.shutdown()

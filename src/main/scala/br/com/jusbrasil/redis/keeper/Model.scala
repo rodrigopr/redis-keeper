@@ -118,11 +118,14 @@ case class KeeperConfig (
   timeToMarkAsDown: Int,
   zkQuorum: List[String],
   zkPrefix: String,
+  restPort: Int,
   clusters: List[ClusterDefinition]
 )
 object KeeperConfig {
   implicit def KeeperConfigCodecJson: CodecJson[KeeperConfig] =
-    casecodec7(KeeperConfig.apply, KeeperConfig.unapply)("keeper-id", "tick-seconds", "failover-tick-seconds", "seconds-mark-down",  "zk-quorum", "zk-prefix", "clusters")
+    casecodec8(KeeperConfig.apply, KeeperConfig.unapply)("keeper-id", "tick-seconds",
+                                                         "failover-tick-seconds", "seconds-mark-down",
+                                                         "zk-quorum", "zk-prefix", "rest-port", "clusters")
 }
 
 case class ClusterStatus(master: Option[RedisNode], slaves: List[RedisNode])

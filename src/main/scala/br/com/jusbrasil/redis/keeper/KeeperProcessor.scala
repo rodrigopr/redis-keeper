@@ -1,15 +1,16 @@
 package br.com.jusbrasil.redis.keeper
 
 import akka.actor.ActorRef
+import argonaut.Argonaut._
 import br.com.jusbrasil.redis.keeper.KeeperActor.KeeperConfiguration
 import com.netflix.curator.framework.recipes.barriers.DistributedBarrier
 import com.netflix.curator.framework.recipes.leader.LeaderLatch
 import concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
-import RedisRole._
+import java.util.concurrent.atomic.AtomicLong
 import org.apache.zookeeper.{ WatchedEvent, Watcher }
 import org.apache.log4j.Logger
-import java.util.concurrent.atomic.AtomicLong
+import RedisRole._
+import scala.concurrent.Future
 
 class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
   val id = keeperConfig.keeperId
@@ -61,6 +62,13 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
   def isLeader = leaderLatch.hasLeadership
   private val numParticipants = new AtomicLong(0)
 
+  def getClusterStatus(clusterName: String): Option[ClusterStatus] = {
+    val cluster = keeperConfig.clusters.find(_.name == clusterName)
+    cluster.map { c =>
+      curatorWrapper.getData("/clusters/%s".format(clusterName)).decodeOption[ClusterStatus]
+    }.flatten
+  }
+
   /**
    * Wait until the leader is elected, and it configures the cluster structure on ZK
    */
@@ -87,7 +95,6 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
       failover.begin()
 
       try {
-        import argonaut.Argonaut._
         val jsonStatus = cluster.getCurrentStatus.asJson.nospaces
         curatorWrapper.createOrSetZkData("/clusters/%s".format(cluster.name), jsonStatus)
       } catch {
