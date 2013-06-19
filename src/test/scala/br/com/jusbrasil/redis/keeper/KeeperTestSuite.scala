@@ -6,14 +6,14 @@ import scala.concurrent.duration._
 import spray.client.pipelining._
 import spray.http._
 import akka.actor.ActorSystem
+import spray.http.HttpHeaders.RawHeader
 
 class RestApiTestSuite extends FlatSpec with KeeperBaseTestSuite {
   implicit val system = ActorSystem("test")
   import system.dispatcher
   val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
-  def restOperation(operation: String, port: Int, cluster: String = "cluster1") =
-    Await.result(pipeline(Get(s"http://127.0.0.1:$port/cluster/$cluster/$operation")), 10.seconds)
-
+  def restOperation(operation: String, port: Int, cluster: String = "cluster1", headers: List[HttpHeader] = Nil) =
+    Await.result(pipeline(Get(s"http://127.0.0.1:$port/cluster/$cluster/$operation").withHeaders(headers)), 10.seconds)
 
   "KeeperRest" should "report cluster status" in {
     val conf = defaultConfig("keeper1", 46379)
@@ -79,30 +79,68 @@ class RestApiTestSuite extends FlatSpec with KeeperBaseTestSuite {
       withRedisInstancesOn(7341) { _ =>
         Thread.sleep(15000)
 
-        assert(restOperation("is-master/127.0.0.1:7341", 46379).entity.asString === """127.0.0.1:7341 is Master""")
-        assert(restOperation("is-master/127.0.0.1:7341", 46378).entity.asString === """127.0.0.1:7341 is Master""")
+        assert(restOperation("is-master/127.0.0.1:7341", 46379).entity.asString === "{'is-master': 'true'}")
+        assert(restOperation("is-master/127.0.0.1:7341", 46378).entity.asString === "{'is-master': 'true'}")
 
-        assert(restOperation("is-master/127.0.0.1:7342", 46379).status == StatusCodes.ServiceUnavailable)
-        assert(restOperation("is-master/127.0.0.1:7342", 46378).status == StatusCodes.ServiceUnavailable)
+        assert(restOperation("is-master/127.0.0.1:7342", 46379).entity.asString === "{'is-master': 'false'}")
+        assert(restOperation("is-master/127.0.0.1:7342", 46378).entity.asString === "{'is-master': 'false'}")
 
         withRedisInstancesOn(7342) { _ =>
           Thread.sleep(15000)
 
-          assert(restOperation("is-master/127.0.0.1:7341", 46379).entity.asString === """127.0.0.1:7341 is Master""")
-          assert(restOperation("is-master/127.0.0.1:7341", 46378).entity.asString === """127.0.0.1:7341 is Master""")
+          assert(restOperation("is-master/127.0.0.1:7341", 46379).entity.asString === "{'is-master': 'true'}")
+          assert(restOperation("is-master/127.0.0.1:7341", 46378).entity.asString === "{'is-master': 'true'}")
 
-          assert(restOperation("is-master/127.0.0.1:7342", 46379).status == StatusCodes.ServiceUnavailable)
-          assert(restOperation("is-master/127.0.0.1:7342", 46378).status == StatusCodes.ServiceUnavailable)
+          assert(restOperation("is-master/127.0.0.1:7342", 46379).entity.asString === "{'is-master': 'false'}")
+          assert(restOperation("is-master/127.0.0.1:7342", 46378).entity.asString === "{'is-master': 'false'}")
         }
       }
 
       Thread.sleep(15000)
 
-      assert(restOperation("is-master/127.0.0.1:7341", 46379).status == StatusCodes.ServiceUnavailable)
-      assert(restOperation("is-master/127.0.0.1:7341", 46378).status == StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-master/127.0.0.1:7341", 46379).entity.asString === "{'is-master': 'false'}")
+      assert(restOperation("is-master/127.0.0.1:7341", 46378).entity.asString === "{'is-master': 'false'}")
 
-      assert(restOperation("is-master/127.0.0.1:7342", 46379).status == StatusCodes.ServiceUnavailable)
-      assert(restOperation("is-master/127.0.0.1:7342", 46378).status == StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-master/127.0.0.1:7342", 46379).entity.asString === "{'is-master': 'false'}")
+      assert(restOperation("is-master/127.0.0.1:7342", 46378).entity.asString === "{'is-master': 'false'}")
+    }
+  }
+
+  "KeeperRest" should "report if node is master using haproxy status" in {
+    val conf = defaultConfig("keeper1", 46379)
+    val conf2 = defaultConfig("keeper2", 46378)
+
+    val node1HaproxyHeader = List[HttpHeader](RawHeader("X-Haproxy-Server-State", "UP 2/3; name=cluster-name/127.0.0.1:7341; node=lb1; weight=1/2; scur=13/22; qcur=0"))
+    val node2HaproxyHeader = List[HttpHeader](RawHeader("X-Haproxy-Server-State", "UP 2/3; name=cluster-name/127.0.0.1:7342; node=lb1; weight=1/2; scur=13/22; qcur=0"))
+
+    withKeepersOn(conf, conf2) { _ =>
+      withRedisInstancesOn(7341) { _ =>
+        Thread.sleep(15000)
+
+        assert(restOperation("is-master", 46379, headers = node1HaproxyHeader).entity.asString === "{'is-master': 'true'}")
+        assert(restOperation("is-master", 46378, headers = node1HaproxyHeader).entity.asString === "{'is-master': 'true'}")
+
+        assert(restOperation("is-master", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+        assert(restOperation("is-master", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+
+        withRedisInstancesOn(7342) { _ =>
+          Thread.sleep(15000)
+
+          assert(restOperation("is-master", 46379, headers = node1HaproxyHeader).entity.asString === "{'is-master': 'true'}")
+          assert(restOperation("is-master", 46378, headers = node1HaproxyHeader).entity.asString === "{'is-master': 'true'}")
+
+          assert(restOperation("is-master", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+          assert(restOperation("is-master", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+        }
+      }
+
+      Thread.sleep(15000)
+
+      assert(restOperation("is-master", 46379, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-master", 46378, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+
+      assert(restOperation("is-master", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-master", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
     }
   }
 
@@ -114,30 +152,67 @@ class RestApiTestSuite extends FlatSpec with KeeperBaseTestSuite {
       withRedisInstancesOn(7341) { _ =>
         Thread.sleep(15000)
 
-        assert(restOperation("is-slave/127.0.0.1:7341", 46379).status === StatusCodes.ServiceUnavailable)
-        assert(restOperation("is-slave/127.0.0.1:7341", 46378).status === StatusCodes.ServiceUnavailable)
+        assert(restOperation("is-slave/127.0.0.1:7341", 46379).entity.asString === "{'is-slave': 'false'}")
+        assert(restOperation("is-slave/127.0.0.1:7341", 46378).entity.asString === "{'is-slave': 'false'}")
 
-        assert(restOperation("is-slave/127.0.0.1:7342", 46379).status === StatusCodes.ServiceUnavailable)
-        assert(restOperation("is-slave/127.0.0.1:7342", 46378).status === StatusCodes.ServiceUnavailable)
+        assert(restOperation("is-slave/127.0.0.1:7342", 46379).entity.asString === "{'is-slave': 'false'}")
+        assert(restOperation("is-slave/127.0.0.1:7342", 46378).entity.asString === "{'is-slave': 'false'}")
 
         withRedisInstancesOn(7342) { _ =>
           Thread.sleep(15000)
 
-          assert(restOperation("is-slave/127.0.0.1:7341", 46379).status == StatusCodes.ServiceUnavailable)
-          assert(restOperation("is-slave/127.0.0.1:7341", 46378).status == StatusCodes.ServiceUnavailable)
+          assert(restOperation("is-slave/127.0.0.1:7341", 46379).entity.asString === "{'is-slave': 'false'}")
+          assert(restOperation("is-slave/127.0.0.1:7341", 46378).entity.asString === "{'is-slave': 'false'}")
 
-          assert(restOperation("is-slave/127.0.0.1:7342", 46379).entity.asString === """127.0.0.1:7342 is Slave""")
-          assert(restOperation("is-slave/127.0.0.1:7342", 46378).entity.asString === """127.0.0.1:7342 is Slave""")
+          assert(restOperation("is-slave/127.0.0.1:7342", 46379).entity.asString === "{'is-slave': 'true'}")
+          assert(restOperation("is-slave/127.0.0.1:7342", 46378).entity.asString === "{'is-slave': 'true'}")
         }
       }
 
       Thread.sleep(15000)
 
-      assert(restOperation("is-slave/127.0.0.1:7341", 46379).status == StatusCodes.ServiceUnavailable)
-      assert(restOperation("is-slave/127.0.0.1:7341", 46378).status == StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-slave/127.0.0.1:7341", 46379).entity.asString === "{'is-slave': 'false'}")
+      assert(restOperation("is-slave/127.0.0.1:7341", 46378).entity.asString === "{'is-slave': 'false'}")
 
-      assert(restOperation("is-slave/127.0.0.1:7342", 46379).status == StatusCodes.ServiceUnavailable)
-      assert(restOperation("is-slave/127.0.0.1:7342", 46378).status == StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-slave/127.0.0.1:7342", 46379).entity.asString === "{'is-slave': 'false'}")
+      assert(restOperation("is-slave/127.0.0.1:7342", 46378).entity.asString === "{'is-slave': 'false'}")
+    }
+  }
+  "KeeperRest" should "report if node is slave using haproxy status" in {
+    val conf = defaultConfig("keeper1", 46379)
+    val conf2 = defaultConfig("keeper2", 46378)
+
+    val node1HaproxyHeader = List[HttpHeader](RawHeader("X-Haproxy-Server-State", "UP 2/3; name=cluster-name/127.0.0.1:7341; node=lb1; weight=1/2; scur=13/22; qcur=0"))
+    val node2HaproxyHeader = List[HttpHeader](RawHeader("X-Haproxy-Server-State", "UP 2/3; name=cluster-name/127.0.0.1:7342; node=lb1; weight=1/2; scur=13/22; qcur=0"))
+
+    withKeepersOn(conf, conf2) { _ =>
+      withRedisInstancesOn(7341) { _ =>
+        Thread.sleep(15000)
+
+        assert(restOperation("is-slave", 46379, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+        assert(restOperation("is-slave", 46378, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+
+        assert(restOperation("is-slave", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+        assert(restOperation("is-slave", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+
+        withRedisInstancesOn(7342) { _ =>
+          Thread.sleep(15000)
+
+          assert(restOperation("is-slave", 46379, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+          assert(restOperation("is-slave", 46378, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+
+          assert(restOperation("is-slave", 46379, headers = node2HaproxyHeader).entity.asString === "{'is-slave': 'true'}")
+          assert(restOperation("is-slave", 46378, headers = node2HaproxyHeader).entity.asString === "{'is-slave': 'true'}")
+        }
+      }
+
+      Thread.sleep(15000)
+
+      assert(restOperation("is-slave", 46379, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-slave", 46378, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+
+      assert(restOperation("is-slave", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-slave", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
     }
   }
 }
@@ -155,7 +230,7 @@ class KeeperTestSuite extends FlatSpec with KeeperBaseTestSuite {
         val detectedAsDown1 = zkClient.getChildren(RedisNode.statusPath(cluster, node1))
         assert(detectedAsDown1.isEmpty)
         val detectedAsDown2 = zkClient.getChildren(RedisNode.statusPath(cluster, node2))
-        assert(detectedAsDown2.size == 1)
+        assert(detectedAsDown2.size === 1)
 
         assertNodeRole(cluster, node1, RedisRole.Master.toString)
         assertNodeRole(cluster, node2, RedisRole.Down.toString)
@@ -188,7 +263,7 @@ class KeeperTestSuite extends FlatSpec with KeeperBaseTestSuite {
         val detectedAsDown1 = zkClient.getChildren(RedisNode.statusPath(cluster, node1))
         assert(detectedAsDown1.isEmpty)
         val detectedAsDown2 = zkClient.getChildren(RedisNode.statusPath(cluster, node2))
-        assert(detectedAsDown2.size == 3)
+        assert(detectedAsDown2.size === 3)
 
         assertNodeRole(cluster, node1, RedisRole.Master.toString)
         assertNodeRole(cluster, node2, RedisRole.Down.toString)

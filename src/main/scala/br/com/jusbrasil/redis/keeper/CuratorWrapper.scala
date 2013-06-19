@@ -14,11 +14,11 @@ class CuratorWrapper(zkQuorum: String, prefix: String = "/rediskeeper") {
     instance.start()
     instance.getZookeeperClient.blockUntilConnectedOrTimedOut()
 
-    ensureZKPath(prefix)
+    ensureZKPath("")
   }
 
   def buildPath(path: String) = {
-    val suffix = if (!path.startsWith("/")) "/" + path else path
+    val suffix = if (!path.startsWith("/") && !path.isEmpty) "/" + path else path
     prefix + suffix
   }
 

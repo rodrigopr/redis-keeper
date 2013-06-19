@@ -27,7 +27,7 @@ class RedisClusterActor(cluster: ClusterDefinition, keeper: KeeperProcessor) ext
         (node.actor ? t)(timeout) recover { case _ => }
       }
 
-      Try { Await.ready(Future.sequence(responses), timeout * 2) }
+      Try { Await.ready(Future.sequence(responses), timeout) }
       updateNodesStatus()
       stay()
 

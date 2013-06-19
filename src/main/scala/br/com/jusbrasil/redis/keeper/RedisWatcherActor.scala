@@ -46,7 +46,7 @@ class RedisWatcherActor(node: RedisNode) extends Actor {
       val infoMap = Await.result(redisInfo, timeout)
 
       // No only the node need to be accessible, but it must not be loading data
-      val isOnline = infoMap.get("loading").map("0" ==).getOrElse(false)
+      val isOnline = infoMap.get("loading").exists("0" ==)
       if(isOnline) {
         node.status.lastSeenOnline = new Date
         node.status.info = infoMap

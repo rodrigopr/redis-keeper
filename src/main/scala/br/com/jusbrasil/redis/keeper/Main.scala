@@ -30,7 +30,7 @@ class Main(val keeperConfig: KeeperConfig) {
 
   def createRestApi() {
     val service = system.actorOf(Props(new KeeperRestService(keeper)), "rest-service")
-    IO(Http) ! Http.Bind(service, "localhost", keeperConfig.restPort)
+    IO(Http) ! Http.Bind(service, "0.0.0.0", keeperConfig.restPort)
   }
 
   def shutdown() {
