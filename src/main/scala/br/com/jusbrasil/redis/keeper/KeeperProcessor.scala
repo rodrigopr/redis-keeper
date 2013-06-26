@@ -11,6 +11,7 @@ import org.apache.zookeeper.{ WatchedEvent, Watcher }
 import org.apache.log4j.Logger
 import RedisRole._
 import scala.concurrent.Future
+import com.netflix.curator.framework.recipes.cache.NodeCache
 
 class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
   val id = keeperConfig.keeperId
@@ -20,6 +21,10 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
 
   private val initializeBarrier = new DistributedBarrier(curatorWrapper.instance, "/rediskeeper/initialize-barrier")
   private var leaderLatch: LeaderLatch = _
+
+  private val clustersStatusCache = keeperConfig.clusters.map { cluster =>
+    cluster -> new NodeCache(curatorWrapper.instance, "/clusters/%s".format(cluster.name))
+  }.toMap
 
   /**
    * Run election asynchronously,
@@ -64,9 +69,15 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
 
   def getClusterStatus(clusterName: String): Option[ClusterStatus] = {
     val cluster = keeperConfig.clusters.find(_.name == clusterName)
-    cluster.map { c =>
-      curatorWrapper.getData("/clusters/%s".format(clusterName)).decodeOption[ClusterStatus]
-    }.flatten
+
+    cluster.flatMap { c =>
+      Option(clustersStatusCache(c).getCurrentData).map{ cache =>
+        new String(cache.getData)
+      } orElse {
+        //TODO: Fix cluster ZK path, keep it in a single place.
+        Some(curatorWrapper.getData("/clusters/%s".format(clusterName)))
+      } flatMap { s => s.decodeOption[ClusterStatus] }
+    }
   }
 
   /**
@@ -80,6 +91,7 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
     Thread.sleep(500)
 
     initializeBarrier.waitOnBarrier()
+    clustersStatusCache.values.foreach(_.start())
     //TODO: check for configuration on ZK, the leader`s configuration should match.
   }
 
