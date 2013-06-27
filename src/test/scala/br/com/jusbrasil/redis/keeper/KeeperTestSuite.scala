@@ -79,30 +79,30 @@ class RestApiTestSuite extends FlatSpec with KeeperBaseTestSuite {
       withRedisInstancesOn(7341) { _ =>
         Thread.sleep(15000)
 
-        assert(restOperation("is-master/127.0.0.1:7341", 46379).entity.asString === "{'is-master': 'true'}")
-        assert(restOperation("is-master/127.0.0.1:7341", 46378).entity.asString === "{'is-master': 'true'}")
+        assert(restOperation("is-writable/127.0.0.1:7341", 46379).entity.asString === "{'is-writable': 'true'}")
+        assert(restOperation("is-writable/127.0.0.1:7341", 46378).entity.asString === "{'is-writable': 'true'}")
 
-        assert(restOperation("is-master/127.0.0.1:7342", 46379).entity.asString === "{'is-master': 'false'}")
-        assert(restOperation("is-master/127.0.0.1:7342", 46378).entity.asString === "{'is-master': 'false'}")
+        assert(restOperation("is-writable/127.0.0.1:7342", 46379).entity.asString === "{'is-writable': 'false'}")
+        assert(restOperation("is-writable/127.0.0.1:7342", 46378).entity.asString === "{'is-writable': 'false'}")
 
         withRedisInstancesOn(7342) { _ =>
           Thread.sleep(15000)
 
-          assert(restOperation("is-master/127.0.0.1:7341", 46379).entity.asString === "{'is-master': 'true'}")
-          assert(restOperation("is-master/127.0.0.1:7341", 46378).entity.asString === "{'is-master': 'true'}")
+          assert(restOperation("is-writable/127.0.0.1:7341", 46379).entity.asString === "{'is-writable': 'true'}")
+          assert(restOperation("is-writable/127.0.0.1:7341", 46378).entity.asString === "{'is-writable': 'true'}")
 
-          assert(restOperation("is-master/127.0.0.1:7342", 46379).entity.asString === "{'is-master': 'false'}")
-          assert(restOperation("is-master/127.0.0.1:7342", 46378).entity.asString === "{'is-master': 'false'}")
+          assert(restOperation("is-writable/127.0.0.1:7342", 46379).entity.asString === "{'is-writable': 'false'}")
+          assert(restOperation("is-writable/127.0.0.1:7342", 46378).entity.asString === "{'is-writable': 'false'}")
         }
       }
 
       Thread.sleep(15000)
 
-      assert(restOperation("is-master/127.0.0.1:7341", 46379).entity.asString === "{'is-master': 'false'}")
-      assert(restOperation("is-master/127.0.0.1:7341", 46378).entity.asString === "{'is-master': 'false'}")
+      assert(restOperation("is-writable/127.0.0.1:7341", 46379).entity.asString === "{'is-writable': 'false'}")
+      assert(restOperation("is-writable/127.0.0.1:7341", 46378).entity.asString === "{'is-writable': 'false'}")
 
-      assert(restOperation("is-master/127.0.0.1:7342", 46379).entity.asString === "{'is-master': 'false'}")
-      assert(restOperation("is-master/127.0.0.1:7342", 46378).entity.asString === "{'is-master': 'false'}")
+      assert(restOperation("is-writable/127.0.0.1:7342", 46379).entity.asString === "{'is-writable': 'false'}")
+      assert(restOperation("is-writable/127.0.0.1:7342", 46378).entity.asString === "{'is-writable': 'false'}")
     }
   }
 
@@ -117,30 +117,30 @@ class RestApiTestSuite extends FlatSpec with KeeperBaseTestSuite {
       withRedisInstancesOn(7341) { _ =>
         Thread.sleep(15000)
 
-        assert(restOperation("is-master", 46379, headers = node1HaproxyHeader).entity.asString === "{'is-master': 'true'}")
-        assert(restOperation("is-master", 46378, headers = node1HaproxyHeader).entity.asString === "{'is-master': 'true'}")
+        assert(restOperation("is-writable", 46379, headers = node1HaproxyHeader).entity.asString === "{'is-writable': 'true'}")
+        assert(restOperation("is-writable", 46378, headers = node1HaproxyHeader).entity.asString === "{'is-writable': 'true'}")
 
-        assert(restOperation("is-master", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
-        assert(restOperation("is-master", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+        assert(restOperation("is-writable", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+        assert(restOperation("is-writable", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
 
         withRedisInstancesOn(7342) { _ =>
           Thread.sleep(15000)
 
-          assert(restOperation("is-master", 46379, headers = node1HaproxyHeader).entity.asString === "{'is-master': 'true'}")
-          assert(restOperation("is-master", 46378, headers = node1HaproxyHeader).entity.asString === "{'is-master': 'true'}")
+          assert(restOperation("is-writable", 46379, headers = node1HaproxyHeader).entity.asString === "{'is-writable': 'true'}")
+          assert(restOperation("is-writable", 46378, headers = node1HaproxyHeader).entity.asString === "{'is-writable': 'true'}")
 
-          assert(restOperation("is-master", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
-          assert(restOperation("is-master", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+          assert(restOperation("is-writable", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+          assert(restOperation("is-writable", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
         }
       }
 
       Thread.sleep(15000)
 
-      assert(restOperation("is-master", 46379, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
-      assert(restOperation("is-master", 46378, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-writable", 46379, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-writable", 46378, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
 
-      assert(restOperation("is-master", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
-      assert(restOperation("is-master", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-writable", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-writable", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
     }
   }
 
@@ -152,30 +152,30 @@ class RestApiTestSuite extends FlatSpec with KeeperBaseTestSuite {
       withRedisInstancesOn(7341) { _ =>
         Thread.sleep(15000)
 
-        assert(restOperation("is-slave/127.0.0.1:7341", 46379).entity.asString === "{'is-slave': 'false'}")
-        assert(restOperation("is-slave/127.0.0.1:7341", 46378).entity.asString === "{'is-slave': 'false'}")
+        assert(restOperation("is-readable/127.0.0.1:7341", 46379).entity.asString === "{'is-readable': 'true'}")
+        assert(restOperation("is-readable/127.0.0.1:7341", 46378).entity.asString === "{'is-readable': 'true'}")
 
-        assert(restOperation("is-slave/127.0.0.1:7342", 46379).entity.asString === "{'is-slave': 'false'}")
-        assert(restOperation("is-slave/127.0.0.1:7342", 46378).entity.asString === "{'is-slave': 'false'}")
+        assert(restOperation("is-readable/127.0.0.1:7342", 46379).entity.asString === "{'is-readable': 'false'}")
+        assert(restOperation("is-readable/127.0.0.1:7342", 46378).entity.asString === "{'is-readable': 'false'}")
 
         withRedisInstancesOn(7342) { _ =>
           Thread.sleep(15000)
 
-          assert(restOperation("is-slave/127.0.0.1:7341", 46379).entity.asString === "{'is-slave': 'false'}")
-          assert(restOperation("is-slave/127.0.0.1:7341", 46378).entity.asString === "{'is-slave': 'false'}")
+          assert(restOperation("is-readable/127.0.0.1:7341", 46379).entity.asString === "{'is-readable': 'true'}")
+          assert(restOperation("is-readable/127.0.0.1:7341", 46378).entity.asString === "{'is-readable': 'true'}")
 
-          assert(restOperation("is-slave/127.0.0.1:7342", 46379).entity.asString === "{'is-slave': 'true'}")
-          assert(restOperation("is-slave/127.0.0.1:7342", 46378).entity.asString === "{'is-slave': 'true'}")
+          assert(restOperation("is-readable/127.0.0.1:7342", 46379).entity.asString === "{'is-readable': 'true'}")
+          assert(restOperation("is-readable/127.0.0.1:7342", 46378).entity.asString === "{'is-readable': 'true'}")
         }
       }
 
       Thread.sleep(15000)
 
-      assert(restOperation("is-slave/127.0.0.1:7341", 46379).entity.asString === "{'is-slave': 'false'}")
-      assert(restOperation("is-slave/127.0.0.1:7341", 46378).entity.asString === "{'is-slave': 'false'}")
+      assert(restOperation("is-readable/127.0.0.1:7341", 46379).entity.asString === "{'is-readable': 'false'}")
+      assert(restOperation("is-readable/127.0.0.1:7341", 46378).entity.asString === "{'is-readable': 'false'}")
 
-      assert(restOperation("is-slave/127.0.0.1:7342", 46379).entity.asString === "{'is-slave': 'false'}")
-      assert(restOperation("is-slave/127.0.0.1:7342", 46378).entity.asString === "{'is-slave': 'false'}")
+      assert(restOperation("is-readable/127.0.0.1:7342", 46379).entity.asString === "{'is-readable': 'false'}")
+      assert(restOperation("is-readable/127.0.0.1:7342", 46378).entity.asString === "{'is-readable': 'false'}")
     }
   }
   "KeeperRest" should "report if node is slave using haproxy status" in {
@@ -189,30 +189,30 @@ class RestApiTestSuite extends FlatSpec with KeeperBaseTestSuite {
       withRedisInstancesOn(7341) { _ =>
         Thread.sleep(15000)
 
-        assert(restOperation("is-slave", 46379, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
-        assert(restOperation("is-slave", 46378, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+        assert(restOperation("is-readable", 46379, headers = node1HaproxyHeader).entity.asString === "{'is-readable': 'true'}")
+        assert(restOperation("is-readable", 46378, headers = node1HaproxyHeader).entity.asString === "{'is-readable': 'true'}")
 
-        assert(restOperation("is-slave", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
-        assert(restOperation("is-slave", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+        assert(restOperation("is-readable", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+        assert(restOperation("is-readable", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
 
         withRedisInstancesOn(7342) { _ =>
           Thread.sleep(15000)
 
-          assert(restOperation("is-slave", 46379, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
-          assert(restOperation("is-slave", 46378, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+          assert(restOperation("is-readable", 46379, headers = node1HaproxyHeader).entity.asString === "{'is-readable': 'true'}")
+          assert(restOperation("is-readable", 46378, headers = node1HaproxyHeader).entity.asString === "{'is-readable': 'true'}")
 
-          assert(restOperation("is-slave", 46379, headers = node2HaproxyHeader).entity.asString === "{'is-slave': 'true'}")
-          assert(restOperation("is-slave", 46378, headers = node2HaproxyHeader).entity.asString === "{'is-slave': 'true'}")
+          assert(restOperation("is-readable", 46379, headers = node2HaproxyHeader).entity.asString === "{'is-readable': 'true'}")
+          assert(restOperation("is-readable", 46378, headers = node2HaproxyHeader).entity.asString === "{'is-readable': 'true'}")
         }
       }
 
       Thread.sleep(15000)
 
-      assert(restOperation("is-slave", 46379, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
-      assert(restOperation("is-slave", 46378, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-readable", 46379, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-readable", 46378, headers = node1HaproxyHeader).status === StatusCodes.ServiceUnavailable)
 
-      assert(restOperation("is-slave", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
-      assert(restOperation("is-slave", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-readable", 46379, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
+      assert(restOperation("is-readable", 46378, headers = node2HaproxyHeader).status === StatusCodes.ServiceUnavailable)
     }
   }
 }
