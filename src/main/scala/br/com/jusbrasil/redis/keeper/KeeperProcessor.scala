@@ -32,7 +32,8 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
    * When acquire the leadership it will configure the cluster on ZK, and notify the keeperActor.
    */
   def runAsyncElection() {
-    leaderLatch = new LeaderLatch(curatorWrapper.instance, "/rediskeeper/leader", keeperConfig.keeperId)
+    val leaderPath = "%s/leader".format(keeperConfig.zkPrefix)
+    leaderLatch = new LeaderLatch(curatorWrapper.instance, leaderPath, keeperConfig.keeperId)
     leaderLatch.start()
 
     Future {
@@ -51,7 +52,7 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
             }
           }
         }
-        curatorWrapper.instance.getChildren.usingWatcher(watcher).inBackground().forPath("/leader")
+        curatorWrapper.instance.getChildren.usingWatcher(watcher).inBackground().forPath(leaderPath)
 
         configure()
         leaderActor ! KeeperConfiguration(this, keeperConfig.clusters)
