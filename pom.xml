@@ -86,17 +86,17 @@
     <dependency>
       <groupId>io.spray</groupId>
       <artifactId>spray-routing</artifactId>
-      <version>1.1-M8</version>
+      <version>1.2-M8</version>
     </dependency>
     <dependency>
       <groupId>io.spray</groupId>
       <artifactId>spray-can</artifactId>
-      <version>1.1-M8</version>
+      <version>1.2-M8</version>
     </dependency>
     <dependency>
       <groupId>io.spray</groupId>
       <artifactId>spray-client</artifactId>
-      <version>1.1-M8</version>
+      <version>1.2-M8</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
