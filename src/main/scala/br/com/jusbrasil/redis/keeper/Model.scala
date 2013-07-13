@@ -18,6 +18,7 @@ object RedisRole extends Enumeration {
 class RedisNodeStatus {
   var isOnline: Boolean = true
   var lastSeenOnline: Date = new Date()
+  var lastChecked: Date = new Date()
   var info: Map[String, String] = Map.empty
 }
 object RedisNodeStatus {

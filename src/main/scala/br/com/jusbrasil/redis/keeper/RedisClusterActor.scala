@@ -8,6 +8,7 @@ import akka.pattern._
 import collection.mutable
 import scala.util.Try
 import org.apache.log4j.Logger
+import java.util.Date
 
 object ClusterActorState extends Enumeration {
   type ClusterActorState = Value
@@ -119,7 +120,11 @@ class RedisClusterActor(cluster: ClusterDefinition, keeper: KeeperProcessor) ext
   def updateNodesStatus() {
     def isOnline(node: RedisNode): Boolean = {
       val lastSeen = node.status.lastSeenOnline
-      lastSeen.getTime + cluster.timeToMarkAsDown.toMillis >= System.currentTimeMillis
+      val lastChecked = node.status.lastChecked
+      val currentTime = System.currentTimeMillis
+      val checkIsTooOld = lastChecked.getTime + cluster.timeToMarkAsDown.toMillis >= currentTime
+      val isOnlineRecently = lastSeen.getTime + cluster.timeToMarkAsDown.toMillis >= currentTime
+      isOnlineRecently && !checkIsTooOld
     }
 
     val offlineNodes = cluster.nodes.filterNot(isOnline).toList
@@ -138,6 +143,8 @@ class RedisClusterActor(cluster: ClusterDefinition, keeper: KeeperProcessor) ext
       keeper.updateNodeStatusOnZK(cluster, node, isOnline = true)
       node.status.isOnline = true
     }
+
+    cluster.nodes.foreach { n => n.status.lastChecked = new Date}
   }
 
   initialize
