@@ -52,9 +52,7 @@ class RedisClusterActor(cluster: ClusterDefinition, keeper: KeeperProcessor) ext
    */
   when(ProcessingFailover, stateTimeout = 5.minute) {
     //TODO: better handle failover timeouts
-    case Event(StateTimeout | FailoverFinished, _) =>
-      logger.error("Error processing failover for cluster %s".format(cluster))
-      goto(Monitoring)
+    case Event(StateTimeout | FailoverFinished, _) => goto(Monitoring)
   }
 
   whenUnhandled {
@@ -120,17 +118,21 @@ class RedisClusterActor(cluster: ClusterDefinition, keeper: KeeperProcessor) ext
    * Update nodes status on ZK
    */
   def updateNodesStatus() {
+    val currentTime = System.currentTimeMillis
+    val timeToMarkAsDown = cluster.timeToMarkAsDown.toMillis
+
     def isOnline(node: RedisNode): Boolean = {
       val lastSeen = node.status.lastSeenOnline
-      val lastChecked = node.status.lastChecked
-      val currentTime = System.currentTimeMillis
-      val checkIsTooOld = lastChecked.getTime + cluster.timeToMarkAsDown.toMillis >= currentTime
-      val isOnlineRecently = lastSeen.getTime + cluster.timeToMarkAsDown.toMillis >= currentTime
-      isOnlineRecently && !checkIsTooOld
+      lastSeen.getTime + timeToMarkAsDown >= currentTime
     }
 
-    val offlineNodes = cluster.nodes.filterNot(isOnline).toList
-    val backOnlineNodes = cluster.offlineNodes.filter(isOnline).toList
+    def isValid(node: RedisNode): Boolean = {
+      val lastChecked = node.status.lastChecked
+      lastChecked.getTime + timeToMarkAsDown >= currentTime
+    }
+
+    val offlineNodes = cluster.nodes.filterNot(isOnline).filter(isValid).toList
+    val backOnlineNodes = cluster.offlineNodes.filter(isOnline).filter(isValid).toList
 
     offlineNodes.foreach { node =>
       if (node.status.isOnline) {
