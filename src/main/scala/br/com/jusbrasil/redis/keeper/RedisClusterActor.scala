@@ -52,7 +52,9 @@ class RedisClusterActor(cluster: ClusterDefinition, keeper: KeeperProcessor) ext
    */
   when(ProcessingFailover, stateTimeout = 5.minute) {
     //TODO: better handle failover timeouts
-    case Event(StateTimeout | FailoverFinished, _) => goto(Monitoring)
+    case Event(StateTimeout | FailoverFinished, _) =>
+      logger.error("Error processing failover for cluster %s".format(cluster))
+      goto(Monitoring)
   }
 
   whenUnhandled {
