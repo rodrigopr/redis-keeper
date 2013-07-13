@@ -19,13 +19,13 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
   private val curatorWrapper = new CuratorWrapper(keeperConfig.zkQuorum.mkString(","), keeperConfig.zkPrefix)
   curatorWrapper.init()
 
-  private val initializeBarrier = new DistributedBarrier(curatorWrapper.instance, "/rediskeeper/initialize-barrier")
+  private val initializeBarrier = new DistributedBarrier(curatorWrapper.instance, "%s/initialize-barrier".format(keeperConfig.zkPrefix))
   private var leaderLatch: LeaderLatch = _
   private val numParticipants = new AtomicLong(0)
   private val isRunning = new AtomicBoolean(false)
 
   private val clustersStatusCache = keeperConfig.clusters.map { cluster =>
-    cluster -> new NodeCache(curatorWrapper.instance, "/clusters/%s".format(cluster.name))
+    cluster.name -> new NodeCache(curatorWrapper.instance, "%s/clusters/%s".format(keeperConfig.zkPrefix, cluster.name))
   }.toMap
 
   /**
@@ -75,8 +75,8 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
   def getClusterStatus(clusterName: String): Future[Option[ClusterStatus]] = {
     val cluster = keeperConfig.clusters.find(_.name == clusterName)
 
-    Future {  cluster.flatMap { c =>
-        Option(clustersStatusCache(c).getCurrentData).map{ cache =>
+    Future { cluster.flatMap { c =>
+        Option(clustersStatusCache(clusterName).getCurrentData).map{ cache =>
           new String(cache.getData)
         } orElse {
           //TODO: Fix cluster ZK path, keep it in a single place.
