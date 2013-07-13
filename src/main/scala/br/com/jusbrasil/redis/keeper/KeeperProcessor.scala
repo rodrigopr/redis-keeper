@@ -6,7 +6,7 @@ import br.com.jusbrasil.redis.keeper.KeeperActor.KeeperConfiguration
 import com.netflix.curator.framework.recipes.barriers.DistributedBarrier
 import com.netflix.curator.framework.recipes.leader.LeaderLatch
 import concurrent.ExecutionContext.Implicits.global
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import org.apache.zookeeper.{ WatchedEvent, Watcher }
 import org.apache.log4j.Logger
 import RedisRole._
@@ -21,6 +21,8 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
 
   private val initializeBarrier = new DistributedBarrier(curatorWrapper.instance, "/rediskeeper/initialize-barrier")
   private var leaderLatch: LeaderLatch = _
+  private val numParticipants = new AtomicLong(0)
+  private val isRunning = new AtomicBoolean(false)
 
   private val clustersStatusCache = keeperConfig.clusters.map { cluster =>
     cluster -> new NodeCache(curatorWrapper.instance, "/clusters/%s".format(cluster.name))
@@ -35,6 +37,7 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
     val leaderPath = "%s/leader".format(keeperConfig.zkPrefix)
     leaderLatch = new LeaderLatch(curatorWrapper.instance, leaderPath, keeperConfig.keeperId)
     leaderLatch.start()
+    isRunning.set(true)
 
     Future {
       leaderLatch.await()
@@ -45,7 +48,9 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
         val watcher = new Watcher {
           override def process(event: WatchedEvent) {
             try {
-              numParticipants.set(leaderLatch.getParticipants.size())
+              if(isRunning.get()) {
+                numParticipants.set(leaderLatch.getParticipants.size())
+              }
             } catch{
               case ex: Exception =>
                 logger.error("An error occurred updating number of online keepers.", ex)
@@ -66,7 +71,6 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
   }
 
   def isLeader = leaderLatch.hasLeadership
-  private val numParticipants = new AtomicLong(0)
 
   def getClusterStatus(clusterName: String): Future[Option[ClusterStatus]] = {
     val cluster = keeperConfig.clusters.find(_.name == clusterName)
@@ -150,6 +154,7 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
   }
 
   def shutdown() {
+    isRunning.set(false)
     leaderLatch.close()
     curatorWrapper.stop()
   }
