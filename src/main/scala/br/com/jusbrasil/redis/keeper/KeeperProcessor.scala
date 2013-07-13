@@ -68,16 +68,17 @@ class KeeperProcessor(keeperConfig: KeeperConfig, leaderActor: ActorRef) {
   def isLeader = leaderLatch.hasLeadership
   private val numParticipants = new AtomicLong(0)
 
-  def getClusterStatus(clusterName: String): Option[ClusterStatus] = {
+  def getClusterStatus(clusterName: String): Future[Option[ClusterStatus]] = {
     val cluster = keeperConfig.clusters.find(_.name == clusterName)
 
-    cluster.flatMap { c =>
-      Option(clustersStatusCache(c).getCurrentData).map{ cache =>
-        new String(cache.getData)
-      } orElse {
-        //TODO: Fix cluster ZK path, keep it in a single place.
-        Some(curatorWrapper.getData("/clusters/%s".format(clusterName)))
-      } flatMap { s => s.decodeOption[ClusterStatus] }
+    Future {  cluster.flatMap { c =>
+        Option(clustersStatusCache(c).getCurrentData).map{ cache =>
+          new String(cache.getData)
+        } orElse {
+          //TODO: Fix cluster ZK path, keep it in a single place.
+          Some(curatorWrapper.getData("/clusters/%s".format(clusterName)))
+        } flatMap { s => s.decodeOption[ClusterStatus] }
+      }
     }
   }
 

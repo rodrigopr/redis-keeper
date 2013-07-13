@@ -6,7 +6,7 @@ import akka.actor.Actor
 import argonaut.Argonaut._
 import br.com.jusbrasil.redis.keeper.ClusterStatus._
 import br.com.jusbrasil.redis.keeper.{ClusterStatus, KeeperProcessor}
-import spray.http.{HttpResponse, StatusCodes}
+import spray.http.{HttpEntity, HttpResponse, StatusCode, StatusCodes}
 
 class KeeperRestService(keeper: KeeperProcessor) extends HttpService with Actor {
   implicit def executionContext = actorRefFactory.dispatcher
@@ -19,18 +19,14 @@ class KeeperRestService(keeper: KeeperProcessor) extends HttpService with Actor 
       pathPrefix("cluster" / Segment) { clusterName =>
         /** Cluster status: /cluster/$name/status */
         path("status") {
-          keeper.getClusterStatus(clusterName).map{ clusterStatus =>
-            complete { clusterStatus.asJson.nospaces }
-          }.getOrElse {
-            complete { HttpResponse(StatusCodes.NotFound) }
+          withClusterStatusOr404(clusterName) { case clusterStatus =>
+            clusterStatus.asJson.nospaces
           }
         } ~
         /** Cluster master: /cluster/$name/master */
         path("master") {
-          keeper.getClusterStatus(clusterName).map { clusterStatus =>
-            complete { clusterStatus.master.asJson.nospaces }
-          }.getOrElse {
-            complete { HttpResponse(StatusCodes.NotFound) }
+          withClusterStatusOr404(clusterName) { case clusterStatus =>
+            clusterStatus.master.asJson.nospaces
           }
         } ~
         /** Node is writable(master) (should be used by HAPROXY) */
@@ -40,9 +36,9 @@ class KeeperRestService(keeper: KeeperProcessor) extends HttpService with Actor 
 
             withClusterStatusOr404(clusterName) { clusterStatus =>
               if(isMaster(clusterStatus, nodeId))
-                complete { s"{'is-writable': 'true'}" }
+                s"{'is-writable': 'true'}"
               else
-                complete { HttpResponse(StatusCodes.ServiceUnavailable) }
+                StatusCodes.ServiceUnavailable
             }
           }
         } ~
@@ -53,9 +49,9 @@ class KeeperRestService(keeper: KeeperProcessor) extends HttpService with Actor 
 
             withClusterStatusOr404(clusterName) { clusterStatus =>
               if(isMaster(clusterStatus, nodeId) || isSlave(clusterStatus, nodeId))
-                complete { s"{'is-readable': 'true'}" }
+                s"{'is-readable': 'true'}"
               else
-                complete { HttpResponse(StatusCodes.ServiceUnavailable) }
+                StatusCodes.ServiceUnavailable
             }
           }
         } ~
@@ -63,14 +59,14 @@ class KeeperRestService(keeper: KeeperProcessor) extends HttpService with Actor 
         path("is-writable" / Segment) { nodeId: String =>
           withClusterStatusOr404(clusterName) { clusterStatus =>
             val isWritable = isMaster(clusterStatus, nodeId)
-            complete { s"{'is-writable': '$isWritable'}" }
+            s"{'is-writable': '$isWritable'}"
           }
         } ~
         /** Cluster is readable: /cluster/$name/is-master/$nodeId */
         path("is-readable" / Segment) { nodeId: String =>
           withClusterStatusOr404(clusterName) { case clusterStatus =>
             val isReadable = isSlave(clusterStatus, nodeId) || isMaster(clusterStatus, nodeId)
-            complete { s"{'is-readable': '$isReadable'}" }
+            s"{'is-readable': '$isReadable'}"
           }
         }
       }
@@ -94,11 +90,14 @@ class KeeperRestService(keeper: KeeperProcessor) extends HttpService with Actor 
     nodeId
   }
 
-  def withClusterStatusOr404(clusterName: String)(fn: ClusterStatus => Route): Route = {
-    keeper.getClusterStatus(clusterName).map { clusterStatus =>
-      fn(clusterStatus)
-    } getOrElse {
-      complete { HttpResponse(StatusCodes.NotFound) }
+  def withClusterStatusOr404(clusterName: String)(fn: ClusterStatus => Any): Route = {
+    complete {
+      keeper.getClusterStatus(clusterName).map { clusterStatus =>
+        clusterStatus.map(c => fn(c) match {
+          case content: String => HttpResponse(StatusCodes.OK, HttpEntity(content))
+          case code: StatusCode => HttpResponse(code)
+        }).getOrElse(HttpResponse(StatusCodes.NotFound))
+      }
     }
   }
 }
