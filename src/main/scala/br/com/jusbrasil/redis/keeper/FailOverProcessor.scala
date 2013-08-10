@@ -62,7 +62,11 @@ trait Process {
   protected def setSlaveOf(node: RedisNode, master: Option[RedisNode]) {
     try {
       node.withConnection { connection =>
-        connection.slaveof(master.map(m => (m.host, m.port)).getOrElse(None))
+        master match {
+          case Some(RedisNode(host, port)) => connection.slaveof(host, port)
+          case None => connection.slaveofNoOne()
+        }
+
         logger.info("[Failover: %s] Setting %s to be slave of %s".format(cluster, node, master))
       }
     } catch {

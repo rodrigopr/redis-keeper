@@ -3,8 +3,8 @@ package br.com.jusbrasil.redis.keeper
 import java.util.Date
 import argonaut._, Argonaut._
 import akka.actor.ActorRef
-import com.redis.RedisClient
 import scala.concurrent.duration.FiniteDuration
+import redis.clients.jedis.BinaryJedis
 
 object RedisRole extends Enumeration {
   type RedisRole = Value
@@ -55,12 +55,12 @@ case class RedisNode(host: String, port: Int) {
    * No handling is done to ensure that the connection is healthy.
    * It gets destroyed on the end of the execution
    */
-  def withConnection[T](fn: (RedisClient) => T): T = {
-    val redisConnection = new RedisClient(host, port)
+  def withConnection[T](fn: (BinaryJedis) => T): T = {
+    val redisConnection = new BinaryJedis(host, port, 1000)
     try {
       fn(redisConnection)
     } finally {
-      redisConnection.disconnect
+      redisConnection.disconnect()
     }
   }
 

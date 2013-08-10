@@ -10,6 +10,7 @@ import scala.io.Source
 import spray.can.Http
 import scala.concurrent.Await
 import akka.util.Timeout
+import com.typesafe.config.ConfigFactory
 
 class Main(val keeperConfig: KeeperConfig) {
   private var isOnline = false
@@ -19,7 +20,7 @@ class Main(val keeperConfig: KeeperConfig) {
   def getKeeperProcessor = keeper
 
   def start() {
-    system = ActorSystem("Keeper")
+    system = ActorSystem("Keeper", ConfigFactory.load().getConfig("keeper"))
     val keeperActor = system.actorOf(Props(new KeeperActor(keeperConfig)), "keeper")
 
     createLeaderProcessor(keeperActor)
@@ -71,7 +72,7 @@ class Main(val keeperConfig: KeeperConfig) {
   }
 
   private def initNode(node: RedisNode) {
-    node.actor = system.actorOf(Props(new RedisWatcherActor(node)))
+    node.actor = system.actorOf(Props(new RedisWatcherActor(node)).withDispatcher("watcher-dispatcher"))
   }
 
   private def scheduleTicks(system: ActorSystem, keeperActor: ActorRef) {

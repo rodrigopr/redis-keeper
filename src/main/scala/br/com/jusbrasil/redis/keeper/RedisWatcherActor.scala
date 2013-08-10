@@ -1,9 +1,7 @@
 package br.com.jusbrasil.redis.keeper
 
 import akka.actor._
-import concurrent.ExecutionContext.Implicits.global
 import java.util.Date
-import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 
 import org.apache.log4j.Logger
@@ -36,24 +34,20 @@ class RedisWatcherActor(node: RedisNode) extends Actor {
    * This method updates the local status(lastSeen and redis info) of the redis node being watched
    */
   def updateRedisInfo(timeout: FiniteDuration) {
-    val redisInfo = Future {
-      node.withConnection { connection =>
-        connection.info.map(parseInfo).getOrElse(Map())
-      }
-    }
-
     try {
-      val infoMap = Await.result(redisInfo, timeout)
+      val redisInfo = node.withConnection { connection => parseInfo(connection.info) }
 
       // No only the node need to be accessible, but it must not be loading data
-      val isOnline = infoMap.get("loading").exists("0" ==)
+      val isOnline = redisInfo.get("loading").exists("0" ==)
       if(isOnline) {
         node.status.lastSeenOnline = new Date
-        node.status.info = infoMap
+        node.status.info = redisInfo
       }
+
+      logger.trace("Everything ok with %s".format(node))
     } catch {
       case e: Exception =>
-        logger.trace("Timeout getting info from node %s: %s".format(node, e.getMessage))
+        logger.debug("Timeout getting info from node %s: %s".format(node, e.getMessage))
     }
   }
 }
