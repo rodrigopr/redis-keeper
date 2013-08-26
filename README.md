@@ -1,8 +1,8 @@
 Redis-Keeper
 ----
-Redis-Keeper is a distributed system that monitor and automatize failover of multiple redis clusters.
+Redis-Keeper is a distributed system that monitor and auto failover multiple Redis clusters.
 
-**It is design to work with any client/language available.**
+**It is designed to work with any client/language.**
 
 ----
 
@@ -163,14 +163,14 @@ backend cluster-1-readable
 ----
 
 ### Using:
-You can get the last version at: [Download 0.1]().
+You can get the last version at: [Download 0.1](http://github.com/rodrigopr/redis-keeper/releases/download/untagged-1fd23d8d661be18c3db0/redis-keeper-0.1-bin.zip).
 To start the system execute: `bin/redis-keeper.sh conf/keeper.conf`
 
 ##### To build from source(maven required): 
 ```bash 
 git clone http://github.com/rodrigopr/redis-keeper.git
 cd redis-keeper
-mvn clean package
+mvn clean compile package
 ```
 
 It will produce .zip package in `target/`.
