@@ -163,7 +163,7 @@ backend cluster-1-readable
 ----
 
 ### Using:
-You can get the last version at: [Download 0.1](http://github.com/rodrigopr/redis-keeper/releases/download/untagged-1fd23d8d661be18c3db0/redis-keeper-0.1-bin.zip).
+You can get the last version at: [Download 0.1](https://github.com/rodrigopr/redis-keeper/releases/download/v0.1/redis-keeper-0.1-bin.zip).
 To start the system execute: `bin/redis-keeper.sh conf/keeper.conf`
 
 ##### To build from source(maven required): 
