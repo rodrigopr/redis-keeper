@@ -20,9 +20,9 @@ object ClusterPlanning extends App {
   )
 
   val ports: List[Int] = List(
-    6380, 6381, 6382, 6383,
-    6480, 6481, 6482, 6483,
-    6580, 6581, 6582, 6583
+    6380, 6381, 6382,
+    6480, 6481, 6482,
+    6580, 6581, 6582
   )
 
   val instances = cross(hosts, ports)
@@ -37,23 +37,42 @@ object ClusterPlanning extends App {
         .sortBy(_._2.size * -1)
         .head
 
-      val port = ports.head
+      val port = Random.shuffle(ports.toSeq).head
       ports.remove(port)
 
       (hostName, port) :: list
     }
 
-    "Cluster-%d".format(i) -> nodes
+    "network-cluster-%d".format(i) -> nodes
   }
 
   clusters.foreach{ case (cluster, nodes) =>
-    val nodesFormatted = nodes.map(p => "{'host': '%s', 'port': %d}".format(p._1, p._2)).mkString(",\n    ")
+    val nodesFormatted = nodes.map(p => "{'host' => '%s', 'port' => %d}".format(p._1, p._2)).mkString(",\n    ")
     println(s"""
       |{
-      |  'name': '$cluster',
-      |  'nodes': [
+      |  'name'  => '$cluster',
+      |  'nodes' => [
       |    $nodesFormatted
       |  ]
       |},""".stripMargin)
+  }
+
+  var haMaster = 1301
+  var haSlave = 9301
+
+  clusters.foreach{ case (cluster, nodes) =>
+    val nodesFormatted = nodes.map(p => "'%s:%d'".format(p._1, p._2)).mkString(",\n    ")
+    println(s"""
+      |{
+      |  'name'  => '$cluster',
+      |  'ha-master'  => $haMaster,
+      |  'ha-read-only'  => $haSlave,
+      |  'nodes' => [
+      |    $nodesFormatted
+      |  ]
+      |},""".stripMargin)
+
+    haMaster += 1
+    haSlave += 1
   }
 }
