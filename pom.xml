@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>br.com.jusbrasil</groupId>
   <artifactId>redis-keeper</artifactId>
-  <version>0.1-SNAPSHOT</version>
+  <version>0.1</version>
 
   <properties>
     <scala.version>2.10.0</scala.version>
