@@ -10,7 +10,10 @@ import scala.io.Source
 import spray.can.Http
 import scala.concurrent.Await
 import akka.util.Timeout
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{ConfigException, Config, ConfigFactory}
+import scalaz.\/
+import argonaut.CursorHistory
+import scala.util.{Success, Failure, Try}
 
 class Main(val keeperConfig: KeeperConfig) {
   private var isOnline = false
@@ -20,7 +23,10 @@ class Main(val keeperConfig: KeeperConfig) {
   def getKeeperProcessor = keeper
 
   def start() {
-    system = ActorSystem("Keeper", ConfigFactory.load().getConfig("keeper"))
+    val baseConfig= ConfigFactory.load()
+    val config = Try { baseConfig.getConfig("keeper") }.getOrElse(baseConfig)
+
+    system = ActorSystem("Keeper", config)
     val keeperActor = system.actorOf(Props(new KeeperActor(keeperConfig)), "keeper")
 
     createLeaderProcessor(keeperActor)
@@ -93,11 +99,23 @@ object Main extends App {
     sys.exit(1)
   }
 
-  private val keeperConfig = {
-    val conf = Source.fromFile(args(0)).mkString
+  private val config: String = Source.fromFile(args(0)).mkString
+  private val keeperConfig = parseConfiguration(config)
 
+  def parseConfiguration(conf: String): KeeperConfig = {
     import argonaut.Argonaut._
-    conf.decodeEither[KeeperConfig].getOrElse(throw new RuntimeException)
+
+    conf.decode[KeeperConfig].toEither match {
+      case Left(parseOrDecodeError) =>
+        val errorMsg = parseOrDecodeError.toEither match {
+          case Left(errMsg) => errMsg
+          case Right((errMsg, cursor)) => "Error decoding `%s`: %s".format(cursor.head.getOrElse("root"), errMsg)
+        }
+
+        throw new ConfigurationException(errorMsg)
+
+      case Right(c) => c
+    }
   }
 
   val process = new Main(keeperConfig)
