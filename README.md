@@ -1,19 +1,19 @@
 Redis-Keeper
 ----
-Redis-Keeper is a distributed system that monitor and auto failover multiple Redis clusters.
+Redis-Keeper is a distributed system that monitors and performs auto-failover to multiple Redis clusters.
 
 **It is designed to work with any client/language.**
 
 ----
 
 ##### What about Redis Sentinel?
-Similarly to redis-sentinel it is also a external process that checks the healthy of each redis, and can auto assign a new master in case of failures. It is also design to run in multiple nodes to present a safer[1] view of the system.
+Similarly to redis-sentinel it is also an external process that checks the healthy state of each redis server, and might auto assign a new master in case of failures. It is also designed to run in multiple nodes to present a safer[1] view of the system.
 
-The difference is on the way that those external processes get in a consensus, and how clients get in sync with the current state of the system.
+The difference is on the way those external processes reach a consensus, and how clients get in sync with the current state of the system.
 
 ----
 
-[1] Network partition is something that redis-sentinel is proven to not quite handle, and that i'll try to improve on the next versions of redis-keeper. Even so, keep in mind that a strict CP system is not the intention of this project.
+[1] Network partition is something that redis-sentinel is proven not to handle quite well, and that i'll try to improve on the next versions of redis-keeper. Even so, keep in mind that a strict CP system is not the goal of this project.
 
 To get more info on redis-sentinel under network partition: [Jepsen redis-sentinel test](http://aphyr.com/posts/283-call-me-maybe-redis) and [Antirez reply](http://antirez.com/news/55)
 
@@ -21,19 +21,19 @@ To get more info on redis-sentinel under network partition: [Jepsen redis-sentin
 
 ### How it Works:
 
-When the redis-keeper starts, it will elect one of the online instances as a coordinator Leader. The leader job is to detect when the majority of the system marked a Redis as down, and to trigger a failover process to handle it.
+When the redis-keeper service starts, it will elect one of the online instances as a coordinator Leader. The leader's job is to detect when the majority of the system marked a Redis as down, and to trigger a failover process to handle it.
 It is built using [ZooKeeper](http://zookeeper.apache.org/).
 
-On Leader startup, it will try to automatically identify the Redis cluster configuration(roles, status), and do some role reconfiguration if needed(like multiple redis master).
+When the Leader starts up, it will try to automatically identify the Redis cluster configuration (roles, status), and do some role reconfiguration if needed (like multiple redis master).
 
 ##### What happen when a redis instance goes down?
-Eventually the majority of online redis-keepers will detect the redis instance as down(this may take few seconds, depending on configuration, more bellow). 
+Eventually the majority of online redis-keepers will detect that the redis instance is down (this may take few seconds, depending on the configuration, more below). 
 
-Only then the Leader will act, updating the node status, and trigger a failover process if it had a master role. 
+Only then the Leader will act, updating the node status, and triggering a failover process if the node that went down had a master role. 
 
-This failover process looks for the better[2] surviving slave, and promote it to a master(also update others slave to point to the new master). In case of no good slave available, the failover will fails, and the redis cluster will stay down until a good node is available to become master.
+This failover process looks for the best [2] surviving slave, and promotes it to master (also updating the other slaves to point to the new master). In case of no good slave available, the failover process will fail, and the redis cluster will stay down until a good node is available to become the master.
 
-The leader also take care of update the cluster status on ZooKeeper, so that clients receive the changes.
+The leader also takes care of updating the cluster status on ZooKeeper, so that clients receive the changes.
 
 ----
 
@@ -45,11 +45,11 @@ The leader also take care of update the cluster status on ZooKeeper, so that cli
 
 The project supports a generic approach to the client. Using a rest api, it supports [HAProxy](http://haproxy.1wt.eu/) as a proxy to the proper redis instance.
 
-That way it is language and client independent, and the performance loss is acceptable for most cases(20% loss in our tests).
+Hence, it is language and client independent, and the performance loss is acceptable for most cases(20% loss in our tests).
 A ZooKeeper based client is on the queue for future versions, to achieve maximum performance.
 
-Now we recommend running a local haproxy service, and connect your process to the local haproxy port.
-See [example configuration](#haproxy-example-configuration) for more detail how to configure haproxy.
+Currently we recommend running a local haproxy service, and connecting your process to the local haproxy port.
+See [sample configuration](#haproxy-sample-configuration) for more details on how to configure haproxy.
 
 ----
 
@@ -88,13 +88,13 @@ See [example configuration](#haproxy-example-configuration) for more detail how 
 - `keeper-id`: Unique id used for this redis-keeper(required to be unique across instances)
 - `zk-quorum`: list of zookeeper servers
 - `zk-prefix`: zookeeper prefix
-- `rest-port`: port to be used on rest api
-- `tick-seconds`: seconds between redis health check
-- `failover-tick-seconds`: seconds between failover check/execution
-- `seconds-mark-down`: seconds that a redis node can stay inaccessible before being mark as down
-- `clusters`: list of cluster to be monitored, each cluster has a unique name, and a unique list of redis server.
+- `rest-port`: port to be used on the rest api
+- `tick-seconds`: seconds between redis health checks
+- `failover-tick-seconds`: seconds between failover checks/execution
+- `seconds-mark-down`: seconds that a redis node can stay inaccessible before being marked as down
+- `clusters`: list of clusters to be monitored, each cluster has a unique name, and a unique list of redis servers.
 
-#### HAProxy example configuration:
+#### HAProxy sample configuration:
 
 ```conf
 # Redis-Keeper (cause redis-keeper must be high-available too)
@@ -138,10 +138,10 @@ backend cluster-1-writable
 ```
 
 ```conf
-# Redis readable cluster-1(in case you want to read from slaves too):
+# Redis readable cluster-1 (in case you want to read from slaves too):
 frontend cluster-1-readable
   mode tcp
-  # your client can access this port to read from any online node(slaves + master):
+  # your client can access this port to read from any online nodes (slaves + master):
   bind *:9301 
   default_backend cluster-1-readable
 
@@ -150,7 +150,7 @@ backend cluster-1-readable
   balance static-rr
   http-check send-state
 
-  # Pretty much the same configuration from writable backend, only the url changes
+  # Pretty much the same configuration from the writable backend, only the url changes
   option httpchk GET /cluster/cluster-1/is-readable HTTP/1.1\r\nHost:\ localhost
 
   server 192.168.1.40:6379 192.168.1.40:6379 check inter 10s addr 127.0.0.1 port 4380
@@ -163,8 +163,8 @@ backend cluster-1-readable
 ----
 
 ### Using:
-You can get the last version at: [Download 0.1](https://github.com/rodrigopr/redis-keeper/releases/download/v0.1/redis-keeper-0.1-bin.zip).
-To start the system execute: `bin/redis-keeper.sh conf/keeper.conf`
+You can get the latest version at: [Download 0.1](https://github.com/rodrigopr/redis-keeper/releases/download/v0.1/redis-keeper-0.1-bin.zip).
+To start the system, execute: `bin/redis-keeper.sh conf/keeper.conf`
 
 ##### To build from source(maven required): 
 ```bash 
@@ -173,20 +173,20 @@ cd redis-keeper
 mvn clean compile package
 ```
 
-It will produce .zip package in `target/`.
+It will produce a .zip package in `target/`.
 
-The tests requires redis-server to be installed on your system, add `-DskipTests=true` to end of `mvn` command to disable test execution.
+The tests require redis-server to be installed on your system, add `-DskipTests=true` at the end of the `mvn` command to disable test execution.
 
 -----
 
 ### Todo:
 - **Zookeeper based clients**
-- **Support add redis instance to a cluster** - Today requires restart every redis-keeper.
+- **Support adding redis instances to a cluster** - Currently requires restarting redis-keeper.
 - **Support standby redis instances** - Independent nodes that can be used in any cluster when it is lacking slaves.
-- **Improve slave->master election** - use replication offset of redis 2.8(make it configurable)
+- **Improve slave->master election** - use replication offset from redis 2.8 (make it configurable)
 - **Improve Rest API** - support manual operations (change leader,  add node, rem node, force failover)
-- **Improve failover process** - today the leader must be able to access the slaves to process the failover, no matter if the majority think its up. This could lead to some nasty network partition problems, perhaps we should rethink the way that failover happens, to not rely too much on the leader.
-- **Stronger configuration check**, sync all redis-keeper to have the same configuration(clusters info, timers, etc)
+- **Improve failover process** - currently the leader must be able to access the slaves to process the failover, no matter if the majority thinks it's up. This could lead to some nasty network partition problems, perhaps we should rethink the way that failover happens, not to rely too much on the leader.
+- **Stronger configuration check**, sync all redis-keepers to have the same configuration (cluster info, timers, etc)
 
 ----
 
